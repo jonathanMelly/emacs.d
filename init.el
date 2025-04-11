@@ -1,4 +1,11 @@
 ;jmy
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+;; Comment/uncomment this line to enable MELPA Stable if desired.  See `package-archive-priorities`
+;; and `package-pinned-packages`. Most users will not need or want to do this.
+;;(add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t)
+(package-initialize)
+
 (load-theme 'wheatgrass)
 (set-face-attribute 'default nil
                     :family "Source Code Pro"
@@ -10,15 +17,6 @@
 (setq initial-frame-alist '( (width . 121) (height . 40) ) )
 (setq default-frame-alist '( (width . 121) (height . 40) ) )
 
-;; Save sessions history
-; (setq comint-input-ring-size 10000)
-; (setq comint-input-ring-file-name (expand-file-name "shell-history" user-emacs-directory))
-; (comint-read-input-ring t)
-; (add-hook 'shell-mode-hook 'comint-read-input-ring)
-; (add-hook 'kill-buffer-hook 'comint-write-input-ring)
-; (add-hook 'kill-emacs-hook (lambda ()
-                             ; (comint-write-input-ring)
-                             ; (comint-read-input-ring)))
 
 
 (custom-set-variables
@@ -26,7 +24,7 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(package-selected-packages '(ace-window dash yaml-mode)))
+ '(package-selected-packages nil))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -34,45 +32,6 @@
  ;; If there is more than one, they won't work right.
  )
 
-
-;(require 'server)
-;(if (not (server-running-p)) (server-start))
-
-
-;(load (expand-file-name "fly.el" user-emacs-directory))
-;(add-to-list 'load-path "~/.emacs.d/lisp/")
-
-;(require 'xah-fly-keys)
-;(xah-fly-keys-set-layout "bepo")
-;(xah-fly-keys 1)
-
-;1
-;2
-;3
-;(define-key key-translation-map (kbd "C-(") (kbd "C-4"))
-;(define-key key-translation-map (kbd "C-)") (kbd "C-5"))
-;6
-(define-key key-translation-map (kbd "C-+") (kbd "C-7"))
-;8 is -
-;9 is /
-
-;1
-;2
-;3
-;(define-key key-translation-map (kbd "M-(")   (kbd "M-4")); disabled as M-( may be useful
-;(define-key key-translation-map (kbd "M-)")   (kbd "M-5")); disabled as M-( may be useful
-;6
-(define-key key-translation-map (kbd "M-+")   (kbd "M-7"))
-;8 is -
-;9 is /
-
-;1
-;2
-;3
-;(define-key key-translation-map (kbd "C-M-(")   (kbd "C-M-4")); disabled as C-M-( may be useful
-;(define-key key-translation-map (kbd "C-M-)")   (kbd "C-M-5")); disabled as C-M-( may be useful
-;6
-(define-key key-translation-map (kbd "C-M-+")   (kbd "C-M-7"))
 
 (setq calendar-week-start-day 1          ; Week starts on Monday
       calendar-intermonth-text           ; Display week numbers
@@ -86,12 +45,6 @@
 
 (electric-pair-mode 1)
 
-(require 'package)
-(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-;; Comment/uncomment this line to enable MELPA Stable if desired.  See `package-archive-priorities`
-;; and `package-pinned-packages`. Most users will not need or want to do this.
-;;(add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t)
-(package-initialize)
 
 (global-set-key (kbd "M-o") 'ace-window)
 
@@ -102,3 +55,71 @@
 
 ;; add this especially on Windows, else python output problem
 (set-terminal-coding-system 'utf-8-unix)
+
+
+(use-package diminish
+  :ensure t)
+
+
+;; Install packages if you haven't already
+(use-package helm
+  :ensure t
+  :diminish
+  :config
+  (helm-mode 1))
+
+(use-package projectile
+  :ensure t
+  :diminish
+  :config
+  (projectile-mode +1)
+  :bind-keymap
+  ("C-c p" . projectile-command-map))
+
+(use-package helm-projectile
+  :ensure t
+  :after (helm projectile)
+  :config
+  (helm-projectile-on))
+
+(use-package treemacs
+  :ensure t
+  :defer t
+  :bind
+  (:map global-map
+        ("M-0"       . treemacs-select-window)
+        ("C-x t 1"   . treemacs-delete-other-windows)
+        ("C-x t t"   . treemacs)
+        ("C-x t B"   . treemacs-bookmark)
+        ("C-x t C-t" . treemacs-find-file)
+        ("C-x t M-t" . treemacs-find-tag)))
+        
+(use-package treemacs-projectile
+  :after (treemacs projectile))
+
+(use-package doom-themes
+  :ensure t
+  :config
+  ;; Global settings (defaults)
+  (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
+        doom-themes-enable-italic t) ; if nil, italics is universally disabled
+  (load-theme 'doom-material t)
+
+  ;; Enable flashing mode-line on errors
+  (doom-themes-visual-bell-config)
+
+  ;; or for treemacs users
+  (setq doom-themes-treemacs-theme "doom-atom") ; use "doom-colors" for less minimal icon theme
+  (doom-themes-treemacs-config)
+  ;; Corrects (and improves) org-mode's native fontification.
+  (doom-themes-org-config))
+
+(use-package doom-modeline :ensure t :hook (after-init . doom-modeline-mode))
+
+(use-package nerd-icons
+  ;; :custom
+  ;; The Nerd Font you want to use in GUI
+  ;; "Symbols Nerd Font Mono" is the default and is recommended
+  ;; but you can use any other Nerd Font if you want
+  ;; (nerd-icons-font-family "Symbols Nerd Font Mono")
+  )
