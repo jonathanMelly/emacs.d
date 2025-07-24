@@ -76,6 +76,13 @@
 ;(set-selection-coding-system 'utf-8)
 ;(prefer-coding-system 'utf-8)
 
+;; This is the main one - makes UTF-8 the preferred encoding
+(prefer-coding-system 'utf-8)
+
+;; On Windows, ensure new files default to UTF-8 (not latin1)
+(set-default-coding-systems 'utf-8)
+
+
 
 ;;; Calendar
 ;;Add week number to calendar
@@ -609,13 +616,8 @@
 
 ;;; Theme
 (load-theme 'modus-vivendi-tritanopia t)
-;(add-hook 'after-make-frame-functions
-;          (lambda (frame)
-;            (with-selected-frame frame
-;              (set-face-attribute 'default nil :font "Hack" :height 120))))
-;; Set for initial frame too
-;;(set-face-attribute 'default nil :font "Hack" :height 120)
 
+;; hack font by default
 (customize-set-variable 'default-frame-alist 
                        '((font . "Hack-12")))
 
@@ -623,34 +625,8 @@
 (set-fontset-font
  t 'symbol (font-spec :family "Segoe UI Symbol") nil 'append)
 
-;(set-fontset-font
-;    t 'emoji (font-spec :family "Noto Emoji") nil 'prepend)
+					;Just install Noto Emoji(https://fonts.google.com/noto/specimen/Noto+Emoji)  and it works out of the box!
 
-;;; Modline
-
-;; display time+load average...
-;(display-time-mode 1)
-
-;;https://gitlab.com/jessieh/mood-line
-(use-package mood-line
-  :ensure t
-  :demand t
-  :config 
-	(mood-line-mode)
-	;(setq mood-line-format mood-line-format-default-extended)
-	(setq mood-line-format mood-line-format-default)
-	(setq mood-line-glyph-alist mood-line-glyphs-unicode)
-	)
-;(use-package minions
-;  :ensure t
-;  :demand t
-;  :config
-;  (minions-mode 1))
-
-;force symbol compatible font for range (used in mood-line)
-;(set-fontset-font t '(#x2691 . #x1F2FF) "Segoe UI Symbol" nil 'append)
-					;(set-fontset-font t '(#x1F300 . #x1F6FF) "Noto Color Emoji" nil 'append) ; Emoji range
-  
 ;; minimal UI
 (menu-bar-mode -1) ;; disables menubar
 (tool-bar-mode -1) ;; disables toolbar (icons for open/save...)
@@ -663,6 +639,74 @@
         ;;tab-bar-close-button-show nil ;; don't show tab close button
         ;;tab-line-close-button-show nil ;; don't show tab close button
 ;;)
+
+
+;;; Modline Moodline
+
+;; display time+load average...
+;(display-time-mode 1)
+
+;;https://gitlab.com/jessieh/mood-line
+(use-package mood-line
+  :ensure t
+  :demand t
+  :config 
+	(mood-line-mode)
+	;(setq mood-line-format mood-line-format-default-extended)
+					;(setq mood-line-format mood-line-format-default)
+	
+	;; LEFT SIDE elements:
+	;; - mood-line-segment-modal: Modal editing state (evil-mode, etc.)
+	;; - mood-line-segment-buffer-status: Buffer read-only/modified status (* %)
+	;; - mood-line-segment-client: Emacsclient indicator  
+	;; - mood-line-segment-project: Current project name
+	;; - mood-line-segment-buffer-name: Name of current buffer
+	;; - mood-line-segment-anzu: Search match info ([3/12] style)
+	;; - mood-line-segment-multiple-cursors: Multiple cursors count
+	;; - mood-line-segment-cursor-position: Line and column numbers (L:C)
+	;; - mood-line-segment-cursor-point: Buffer position in characters
+	;; - mood-line-segment-region: Selected region info
+	;; - mood-line-segment-scroll: Scroll position percentage
+
+	;; RIGHT SIDE elements:
+	;; - mood-line-segment-indentation: Indentation settings (spaces/tabs)
+	;; - mood-line-segment-eol: End-of-line format (LF/CRLF)
+	;; - mood-line-segment-encoding: File encoding (utf-8, etc.)
+	;; - mood-line-segment-vc: Version control branch/status
+	;; - mood-line-segment-major-mode: Current major mode
+	;; - mood-line-segment-misc-info: Miscellaneous mode line info
+	;; - mood-line-segment-checker: Syntax checker status (flycheck/flymake)
+	;; - mood-line-segment-process: Running processes
+
+	(setq mood-line-format
+      '((
+         (or (mood-line-segment-buffer-status) (mood-line-segment-client) " ")
+         " " (mood-line-segment-project) "/"
+         (mood-line-segment-buffer-name) " " (mood-line-segment-anzu) " "
+         (mood-line-segment-cursor-position) ""
+         #(":" 0 1 (face mood-line-unimportant))
+         (mood-line-segment-cursor-point) " " (mood-line-segment-region)
+         " " (mood-line-segment-scroll) "")
+        (
+	 " " (mood-line-segment-encoding) "/" (mood-line-segment-eol) " "
+          " " (mood-line-segment-vc) "  "
+         (mood-line-segment-major-mode) " " (mood-line-segment-misc-info)
+         "  " (mood-line-segment-checker) "  " (mood-line-segment-process)
+         " ")))
+
+;;; Anzu to show matching count with isearch
+(use-package anzu
+  :ensure t
+  :config
+  (global-anzu-mode 1)
+  )
+;(use-package minions
+;  :ensure t
+;  :demand t
+;  :config
+;  (minions-mode 1))
+
+  
   
 (setq show-trailing-whitespace t) ;;
 (setq delete-by-moving-to-trash t) ;; use trash-cli rather than rm when deleting files.
