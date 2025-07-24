@@ -63,11 +63,18 @@
 
 ;;source : flykeys.el
 ;; UTF-8 as default encoding
-(set-language-environment 'utf-8)
-(set-default-coding-systems 'utf-8)
-(set-keyboard-coding-system 'utf-8-unix)
+;(set-language-environment 'utf-8)
+;(set-default-coding-systems 'utf-8)
+;(set-keyboard-coding-system 'utf-8-unix)
 ;; add this especially on Windows, else python output problem
-(set-terminal-coding-system 'utf-8-unix)
+;(set-terminal-coding-system 'utf-8-unix)
+
+;(set-language-environment "UTF-8")
+;(setq locale-coding-system 'utf-8)
+;(set-terminal-coding-system 'utf-8)
+;(set-keyboard-coding-system 'utf-8)
+;(set-selection-coding-system 'utf-8)
+;(prefer-coding-system 'utf-8)
 
 
 ;;; Calendar
@@ -331,7 +338,7 @@
 
 ;;; Completion / Search / Minibuffer...
 
-;; Vertico
+;;; Vertico
 (use-package vertico :ensure (:wait t :files (:defaults "extensions/*"))
   :init
   ;; (vertico-scroll-margin 0) ;; Different scroll margin
@@ -347,14 +354,112 @@
   (add-to-list 'vertico-multiform-categories '(embark-keybinding grid))
 )
 
-;; Consult
+;;; Consult
+;https://github.com/minad/consult?tab=readme-ov-file#narrowing-and-grouping
+;DOC: ~/.emacs.d/elpaca/repos/consult/README.org
 (use-package consult :ensure t
-  :bind (("C-x b" . consult-buffer)  ;; Enhanced buffer switching
-         ("C-c b" . consult-buffer)
-	 ("M-g i" . consult-imenu )
-	 ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
+  :bind (
+	 ;; C-c bindings in `mode-specific-map'
+         ("C-c M-x" . consult-mode-command)
+         ("C-c h" . consult-history)
+         ("C-c k" . consult-kmacro)
+         ("C-c m" . consult-man)
+         ("C-c i" . consult-info)
+         ([remap Info-search] . consult-info)
+	 
+	 ;; C-x bindings in `ctl-x-map'
+         ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+         ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+         ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+         ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+         ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
+         ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
          ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
-	 )) ;;replaces default i menu
+         ;; Custom M-# bindings for fast register access
+         ("M-#" . consult-register-load)
+         ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+         ("C-M-#" . consult-register)
+         ;; Other custom bindings
+         ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+         ;; M-g bindings in `goto-map'
+         ("M-g e" . consult-compile-error)
+         ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+         ("M-g g" . consult-goto-line)             ;; orig. goto-line
+         ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+         ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+         ("M-g m" . consult-mark)
+         ("M-g k" . consult-global-mark)
+         ("M-g i" . consult-imenu)
+         ("M-g I" . consult-imenu-multi)
+         ;; M-s bindings in `search-map'
+         ("M-s f" . consult-fd)                  ;; Alternative: consult-find
+         ("M-s c" . consult-locate)
+         ("M-s g" . consult-grep)
+         ("M-s G" . consult-git-grep)
+         ("M-s r" . consult-ripgrep)
+         ("M-s l" . consult-line)
+         ("M-s L" . consult-line-multi)
+         ("M-s k" . consult-keep-lines)
+         ("M-s u" . consult-focus-lines)
+	 ("M-s s" . consult-eglot-symbols)
+         ;; Isearch integration
+         ("M-s e" . consult-isearch-history)
+         :map isearch-mode-map
+         ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+         ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
+         ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+         ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
+         ;; Minibuffer history
+         :map minibuffer-local-map
+         ("M-s" . consult-history)                 ;; orig. next-matching-history-element
+         ("M-r" . consult-history)
+	 )
+  :init
+  ;; Tweak the register preview for `consult-register-load',
+  ;; `consult-register-store' and the built-in commands.  This improves the
+  ;; register formatting, adds thin separator lines, register sorting and hides
+  ;; the window mode line.
+  (advice-add #'register-preview :override #'consult-register-window)
+  (setq register-preview-delay 0.5)
+
+  ;; Use Consult to select xref locations with preview
+  (setq xref-show-xrefs-function #'consult-xref
+        xref-show-definitions-function #'consult-xref)
+  
+  :config
+  (setq consult-narrow-key "C-+");or < or ?
+  ;consult - capf replacement
+  (setq completion-in-region-function #'consult-completion-in-region)
+  ;; Make TAB smart: indent first, then complete
+  (setq tab-always-indent 'complete)
+  ;; Make complete-symbol also use consult
+  (advice-add 'complete-symbol :override #'completion-at-point)
+  
+  ;modified buffers (unsaved)
+  (setq consult--source-modified-buffer
+        `(:name "Modified"
+          :narrow ?M
+          :category buffer
+	  :state consult--buffer-state
+          :items ,(lambda ()
+                    (mapcar #'buffer-name
+                            (seq-filter 
+                             (lambda (buf)
+                               (and (buffer-modified-p buf)
+                                    (buffer-file-name buf)))
+                             (buffer-list))))))
+  
+  (add-to-list 'consult-buffer-sources 'consult--source-modified-buffer)
+
+  ; Not realy checked if realy better
+  ;(setq consult-ripgrep-args
+;	"rg --null --line-buffered --color=never --max-columns=1000 --path-separator / --smart-case --no-heading --line-number -M 500")
+  
+  ;; Enable automatic preview at point in the *Completions* buffer. This is
+  ;; relevant when you use the default completion UI.
+  :hook (completion-list-mode . consult-preview-at-point-mode)
+
+  )
 
 (use-package consult-denote
   :ensure t
@@ -364,19 +469,19 @@
   :config
   (consult-denote-mode 1))
 
-;; Orderless matching
+;;; Orderless matching
 (use-package orderless :ensure t
   :custom
   (completion-styles '(orderless basic))
   (completion-category-overrides '((file (styles basic partial-completion))))
   (orderless-matching-styles '(orderless-literal orderless-regexp orderless-flex)))
 
-;; Marginalia
+;;; Marginalia
 (use-package marginalia :ensure t
   :init
   (marginalia-mode))
 
-;; Embark 
+;;; Embark 
 (use-package embark :ensure t
 
   :bind
@@ -390,7 +495,7 @@
 
   ;; Optionally replace the key help with a completing-read interface
   (setq prefix-help-command #'embark-prefix-help-command)
-
+ 
   ;; Show the Embark target at point via Eldoc. You may adjust the
   ;; Eldoc strategy, if you want to see the documentation from
   ;; multiple providers. Beware that using this can be a little
@@ -399,7 +504,7 @@
 
   ;; (add-hook 'eldoc-documentation-functions #'embark-eldoc-first-target)
   ;; (setq eldoc-documentation-strategy #'eldoc-documentation-compose-eagerly)
-
+  
   :config
 
   ;; Hide the mode line of the Embark live/completions buffers
@@ -504,23 +609,38 @@
 
 ;;; Theme
 (load-theme 'modus-vivendi-tritanopia t)
-(add-hook 'after-make-frame-functions
-          (lambda (frame)
-            (with-selected-frame frame
-              (set-face-attribute 'default nil :font "Hack" :height 120))))
+;(add-hook 'after-make-frame-functions
+;          (lambda (frame)
+;            (with-selected-frame frame
+;              (set-face-attribute 'default nil :font "Hack" :height 120))))
 ;; Set for initial frame too
-(set-face-attribute 'default nil :font "Hack" :height 120)
-(display-time-mode 1)
+;;(set-face-attribute 'default nil :font "Hack" :height 120)
+
+(customize-set-variable 'default-frame-alist 
+                       '((font . "Hack-12")))
+
+;; symbols (for mood-line) and emojis
+(set-fontset-font
+ t 'symbol (font-spec :family "Segoe UI Symbol") nil 'append)
+
+;(set-fontset-font
+;    t 'emoji (font-spec :family "Noto Emoji") nil 'prepend)
+
+;;; Modline
+
+;; display time+load average...
+;(display-time-mode 1)
 
 ;;https://gitlab.com/jessieh/mood-line
-;(use-package mood-line
-;  :ensure t
-;  :demand t
-;  :config 
-;	(mood-line-mode)
-;	(setq mood-line-format mood-line-format-default-extended)
-;	(setq mood-line-glyph-alist mood-line-glyphs-unicode)
-;	)
+(use-package mood-line
+  :ensure t
+  :demand t
+  :config 
+	(mood-line-mode)
+	;(setq mood-line-format mood-line-format-default-extended)
+	(setq mood-line-format mood-line-format-default)
+	(setq mood-line-glyph-alist mood-line-glyphs-unicode)
+	)
 ;(use-package minions
 ;  :ensure t
 ;  :demand t
@@ -528,12 +648,12 @@
 ;  (minions-mode 1))
 
 ;force symbol compatible font for range (used in mood-line)
-(set-fontset-font t '(#x2691 . #x1F7FF) "Segoe UI Symbol" nil 'prepend)
- 
+;(set-fontset-font t '(#x2691 . #x1F2FF) "Segoe UI Symbol" nil 'append)
+					;(set-fontset-font t '(#x1F300 . #x1F6FF) "Noto Color Emoji" nil 'append) ; Emoji range
   
 ;; minimal UI
-;;(menu-bar-mode -1) ;; disables menubar
-;;(tool-bar-mode -1) ;; disables toolbar
+(menu-bar-mode -1) ;; disables menubar
+(tool-bar-mode -1) ;; disables toolbar (icons for open/save...)
 ;;(scroll-bar-mode -1) ;; disables scrollbar
 (pixel-scroll-precision-mode 1) ;; enable smooth scrolling
 
@@ -642,68 +762,6 @@
 (when (eq system-type 'windows-nt)
   (setq wakatime-cli-path "C:\\ws\\apps\\scoop\\apps\\python\\current\\Scripts\\wakatime.exe")
   )
-
-
-;;; Super search
-(defun my/search ()
-  "Universal search. Press C-c s in minibuffer to switch to content search."
-  (interactive)
-  (let* ((project (project-current))
-         (root (and project (project-root project)))
-         ;; Only add sources that are actually available
-         (consult-buffer-sources
-          (append consult-buffer-sources
-                  (delq nil 
-                        (list 
-                         ;; Project files
-                         (when project
-                           `(:name "Project File"
-                             :narrow ?p
-                             :category file
-                             :face consult-file
-                             :history file-name-history
-                             :action ,#'find-file
-                             :items ,(mapcar (lambda (f) 
-                                             (file-relative-name f root))
-                                           (project-files project))))
-                         ;; LSP symbols
-			 ;;TODO replace with Eglot
-                         (when (and (bound-and-true-p lsp-mode) 
-                                   (lsp-workspaces))
-                           `(:name "LSP Symbols"
-                             :narrow ?s
-                             :category symbol
-                             :face consult-imenu
-                             :items ,(condition-case nil
-                                         (consult-lsp--symbols--candidates)
-                                       (error nil))))))))
-         ;; Catch any ripgrep switch
-         (ripgrep-input
-          (catch 'switch-to-ripgrep
-            (minibuffer-with-setup-hook
-                (lambda ()
-                  (local-set-key (kbd "C-c s")
-                                (lambda ()
-                                  (interactive)
-                                  (let ((input (minibuffer-contents-no-properties)))
-                                    ;; Clean up input - remove any narrowing prefix
-                                    (when (string-match "^\\?. *\\(.*\\)" input)
-                                      (setq input (match-string 1 input)))
-                                    (throw 'switch-to-ripgrep input)))))
-              (consult-buffer))
-            nil))) ; Return nil if no switch
-    ;; If we caught an input string, launch ripgrep
-    (when ripgrep-input
-      (if root
-          (consult-ripgrep root ripgrep-input)
-        (consult-ripgrep nil ripgrep-input)))))
-
-;; Configuration
-(setq consult-ripgrep-args
-      "rg --null --line-buffered --color=never --max-columns=1000 --path-separator / --smart-case --no-heading --line-number -M 500")
-
-;; Single key binding
-(global-set-key (kbd "C-c s") #'my/search)
 
 
 ;;; Graphviz
@@ -824,7 +882,20 @@
 ;(with npm language server)
 (use-package php-mode
   :ensure t
-  :hook (php-mode . (lambda () (eglot-ensure) (flymake-mode 1))))
+  :hook (php-mode . (lambda () (eglot-ensure) (flymake-mode 1)))
+  :config
+  ;; Configure eglot to use Intelephense
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(php-mode . ("intelephense" "--stdio"))))
+  
+  :bind (:map php-mode-map
+              ("C-." . nil))  ; Unbind php-show-arglist
+  )
+
+;;; WEB (also for blade template)
+(use-package web-mode
+  :ensure t)
 
 ;;; Powershell
 ; TreeSitter and Eglot
@@ -837,8 +908,50 @@
 
 ;;; EGLOT
 (use-package eglot
-  :hook (yaml-ts-mode . (lambda () (eglot-ensure) (flymake-mode 1))))
+  :hook (yaml-ts-mode . (lambda ()
+			  (eglot-ensure)
+			  (flymake-mode 1)
+			  ;; YAML-specific settings
+                          (setq-local tab-width 2)
+                          (setq-local indent-tabs-mode nil)
+                          (setq-local standard-indent 2)))
+  :bind (:map eglot-mode-map
+         ;; Navigation
+         ("C-c l d" . eglot-find-declaration)
+         ("C-c l i" . eglot-find-implementation)
+         ("C-c l t" . eglot-find-typeDefinition)
+         
+         ;; Code actions & refactoring
+         ("C-c l r" . eglot-rename)
+         ("C-c l a" . eglot-code-actions)
+         ("C-c l o" . eglot-code-action-organize-imports)
+         ("C-c l q" . eglot-code-action-quickfix)
+         
+         ;; Formatting
+         ("C-c l f" . eglot-format)
+         ("C-c l F" . eglot-format-buffer)
+         
+         ;; Documentation & help
+         ("C-c l h" . eldoc)
+         ("C-c l H" . eldoc-doc-buffer)
+         
+         ;; Server management
+         ("C-c l s" . eglot-shutdown)
+         ("C-c l S" . eglot-shutdown-all)
+         ("C-c l R" . eglot-reconnect)
+         
+         ;; Workspace
+         ("C-c l w r" . eglot-workspace-restart)
+         ("C-c l w s" . eglot-signal-didChangeConfiguration)
+         
+         ;; Diagnostics
+         ("C-c l e" . eglot-stderr-buffer)
+         ("C-c l E" . eglot-events-buffer)
+	 )
+  )
 
+(use-package consult-eglot
+  :ensure t)
 ;(use-package eglot
 ;  :defer t
 ;  :hook ((rust-ts-mode . eglot-ensure)
@@ -872,24 +985,6 @@
 ; 
 ;  (dap-auto-configure-mode))
 
-;; lsp
-;(use-package lsp-mode
-;  :ensure t
-;  :init
-  ;; set prefix for lsp-command-keymap (few alternatives - "C-l", "C-c l")
-;  (setq lsp-keymap-prefix "C-c l")
-;  :hook (;; replace XXX-mode with concrete major-mode(e. g. python-mode)
-;         (XXX-mode . lsp)
-;         ;; if you want which-key integration
-;         (lsp-mode . lsp-enable-which-key-integration))
-;  :commands lsp)
-;; optionally
-;(use-package lsp-ui :commands lsp-ui-mode :ensure t)
-;; optionally if you want to use debugger
-;(use-package dap-mode)
-;; (use-package dap-LANGUAGE) to load the dap adapter for your language
-
-;;todo corfu auto completion in buffer
 
 
 ;;;YaSnippet
