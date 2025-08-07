@@ -156,7 +156,7 @@
 (with-eval-after-load 'org
 ;; org todo keyword
   (setq org-todo-keywords
-        '((type "TODO" "WIP" "|" "DONE" "DROP"))))
+        '((sequence "TODO" "WIP" "|" "DONE" "DROP"))))
 
 (setq org-refile-targets '(
 			   (nil :maxlevel . 9);; nil means any header in the current file
@@ -404,6 +404,7 @@
          ("M-s g" . consult-grep)
          ("M-s G" . consult-git-grep)
          ("M-s r" . consult-ripgrep)
+		 ("M-s R" . rg-menu)
          ("M-s l" . consult-line)
          ("M-s L" . consult-line-multi)
          ("M-s k" . consult-keep-lines)
@@ -693,6 +694,7 @@
          (mood-line-segment-major-mode) " " (mood-line-segment-misc-info)
          "  " (mood-line-segment-checker) "  " (mood-line-segment-process)
          " ")))
+		 )
 
 ;;; Anzu to show matching count with isearch
 (use-package anzu
@@ -891,12 +893,13 @@
   (add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.ya?ml\\'" . yaml-ts-mode)))
   
-;;;Markdown
+;;; Markdown
 ;https://jblevins.org/projects/markdown-mode/
 (use-package markdown-mode
   :ensure t
   
-  :mode ("README\\.md\\'" . gfm-mode)
+  :mode (("README\\.md\\'" . gfm-mode)
+         ("\\.md\\'" . markdown-mode))
   
   :init
 	(setq markdown-command '("pandoc" "--from=gfm" "--to=html5"))
@@ -906,21 +909,259 @@
 	
   :bind (:map markdown-mode-map
               ("C-c C-e" . markdown-do)
-	      ("C-c C-v d" . markdown-insert-fenced-code-block)
-	      ("C-c C-v c" . markdown-insert-code)
-	      ("M-<up>" . markdown-move-subtree-up)
-	      ("M-<down>" . markdown-move-subtree-down)
-	      ("M-<left>" . markdown-promote-subtree)
-	      ("M-<right>" . markdown-demote-subtree)
+			  ("C-c C-v d" . markdown-insert-fenced-code-block)
+	          ("C-c C-v c" . markdown-insert-code)
+	          ("C-<return>" . markdown-insert-header-respect-content)
+              ("M-<left>" . markdown-promote)
+              ("M-<right>" . markdown-demote)
+              ("M-<up>" . markdown-move-up)
+              ("M-<down>" . markdown-move-down)
+
+	      ("C-c y" . markdown-paste-clipboard-image)
+              ("C-c C-x C-v" . markdown-toggle-inline-images)
 	      )
   ;; try to remove backtick electric as it prints weird chars...
   :hook (markdown-mode . (lambda () 
                            (setq-local electric-pair-pairs 
                                        (remove '(?` . ?`) electric-pair-pairs))))
-  
-)
-		 
+									   
+  :config
+ 
+  (defun markdown-insert-header-respect-content ()
+    "Insert a new header after the current section, respecting content like org-mode C-RET."
+    (interactive)
+    (let ((current-level (markdown-outline-level)))
+      (if current-level
+          (progn
+            ;; Move to end of current section
+            (markdown-end-of-subtree)
+            (unless (bolp) (newline))
+            (newline)
+            ;; Insert header at same level
+            (insert (make-string current-level ?#) " "))
+        ;; If not in a header, just insert a level 1 header
+        (end-of-line)
+        (newline 2)
+        (insert "# "))))
+  )
+
 (use-package denote-markdown :ensure t)
+
+;; mimic org-download-paste...
+(defun markdown-paste-clipboard-image ()
+  "Save clipboard image to images folder and insert markdown link.
+Uses org-download configuration but works in markdown-mode."
+  (interactive)
+  (let* ((image-dir (if (boundp 'org-download-image-dir)
+                        (expand-file-name org-download-image-dir 
+                                          (file-name-directory (buffer-file-name)))
+                      (expand-file-name "images" 
+                                        (file-name-directory (buffer-file-name)))))
+         (timestamp (if (boundp 'org-download-timestamp)
+                        org-download-timestamp
+                      "_%Y%m%d_%H%M%S"))
+         (filename (format "screenshot%s.png" 
+                          (format-time-string timestamp)))
+         (filepath (expand-file-name filename image-dir)))
+    
+    ;; Create images directory if it doesn't exist
+    (unless (file-exists-p image-dir)
+      (make-directory image-dir t))
+    
+    ;; Save clipboard image (cross-platform)
+    (cond
+     ((eq system-type 'darwin)  ; macOS
+      (if (zerop (shell-command (format "pngpaste '%s'" filepath)))
+          (message "Image saved: %s" filename)
+        (error "Failed to save image. Is pngpaste installed?")))
+     
+     ((eq system-type 'gnu/linux)  ; Linux  
+      (if (zerop (shell-command (format "xclip -selection clipboard -t image/png -o > '%s'" filepath)))
+          (message "Image saved: %s" filename)
+        (error "Failed to save image. Is xclip installed?")))
+     
+     ((eq system-type 'windows-nt)  ; Windows
+      (if (zerop (shell-command 
+                  (format "powershell -command \"Add-Type -AssemblyName System.Windows.Forms; $img = [System.Windows.Forms.Clipboard]::GetImage(); if ($img) { $img.Save('%s', [System.Drawing.Imaging.ImageFormat]::Png); 'Success' } else { exit 1 }\""
+                          filepath)))
+          (message "Image saved: %s" filename)
+        (error "Failed to save image from clipboard")))
+     
+     (t (error "Unsupported operating system")))
+    
+    ;; Insert markdown link
+    (insert (format "![Screenshot](%s)" 
+                    (file-relative-name filepath)))
+    (newline)))
+
+;;; project.el
+(use-package project
+  :config
+  ;; Comprehensive project detection function (if no .git is detected )
+  (defun project-find-by-markers (dir)
+  "Find project root by looking for marker files.
+Patterns starting with a dot are treated as extensions (matches *.ext).
+Returns a transient project for project.el compatibility."
+  (let ((markers '(;; .NET
+                   ".sln"
+                   ".csproj"
+                   ".fsproj"
+                   ".vbproj"
+                   ;; JavaScript/TypeScript
+                   "package.json"
+                   "tsconfig.json"
+                   ;; Rust
+                   "Cargo.toml"
+                   ;; Go
+                   "go.mod"
+                   ;; Java/JVM
+                   "pom.xml"
+                   "build.gradle"
+                   "build.gradle.kts"
+                   ;; PHP
+                   "composer.json"
+                   "artisan"
+                   "symfony.lock"
+                   ;; PowerShell
+                   ".psd1"
+                   ".psm1"
+                   "PSScriptAnalyzerSettings.psd1"
+                   ;; Python
+                   "requirements.txt"
+                   "Pipfile"
+                   "pyproject.toml"
+                   "setup.py"
+                   ;; Ruby
+                   "Gemfile"
+                   "Rakefile"
+                   ;; Elixir
+                   "mix.exs"
+                   ;; Clojure
+                   "project.clj"
+                   "deps.edn"
+                   ;; Generic VCS (as fallback)
+                   ".git"
+                   ".hg"
+                   ".svn")))
+    (cl-loop for pattern in markers
+             for root = (cond
+                         ;; Pattern starts with dot = extension pattern
+                         ;; e.g., ".csproj" matches "MyProject.csproj"
+                         ((and (string-match "^\\.[^./]+$" pattern)
+                               ;; But not .git, .hg, .svn (those are directories)
+                               (not (member pattern '(".git" ".hg" ".svn"))))
+                          (locate-dominating-file 
+                           dir
+                           (lambda (parent)
+                             (directory-files parent nil
+                                            (concat ".*" (regexp-quote pattern) "$")
+                                            t))))  ; t = just check existence, don't return list
+                         ;; Exact filename or directory
+                         (t
+                          (locate-dominating-file dir pattern)))
+             when root
+             return (cons 'transient root))))
+
+
+  ;; Add to project finders
+  (add-hook 'project-find-functions #'project-find-by-markers)
+
+  ;; Mappings des commandes run par mode majeur
+  (setq project-run-commands
+      '((csharp-mode . "dotnet run")
+        (php-mode . "php index.php")
+        (web-mode . "php index.php")
+        (powershell-mode . "pwsh ./main.ps1")
+        (javascript-mode . "npm start")
+        (js-mode . "npm start")
+        (js-ts-mode . "npm start")
+        (typescript-mode . "npm start")
+        (typescript-ts-mode . "npm start")
+        (rust-mode . "cargo run")
+        (rust-ts-mode . "cargo run")
+        (go-mode . "go run .")
+        (go-ts-mode . "go run .")
+        (java-mode . "mvn exec:java")
+        (kotlin-mode . "gradle run")
+        (python-mode . "python main.py")
+        (python-ts-mode . "python main.py")))
+
+  ;; Mappings des commandes test par mode majeur  
+  (setq project-test-commands
+      '((csharp-mode . "dotnet test")
+        (php-mode . "php -l index.php")
+        (web-mode . "php -l index.php")
+        (powershell-mode . "pwsh -File ./main.ps1")
+        (javascript-mode . "npm test")
+        (js-mode . "npm test")
+        (js-ts-mode . "npm test")
+        (typescript-mode . "npm test")
+        (typescript-ts-mode . "npm test")
+        (rust-mode . "cargo test")
+        (rust-ts-mode . "cargo test")
+        (go-mode . "go test")
+        (go-ts-mode . "go test")
+        (java-mode . "mvn test")
+        (kotlin-mode . "gradle test")
+        (python-mode . "python -m pytest")
+        (python-ts-mode . "python -m pytest")))
+
+  (defun project-execute-command (command-type &optional prompt-user)
+  "Execute project command of COMMAND-TYPE ('run or 'test).
+If PROMPT-USER is non-nil, let user edit the command."
+  (if-let ((project (project-current)))
+      (let* ((default-directory (project-root project))
+             ;; Variable spécifique au projet (.dir-locals.el)
+             (var-name (intern (format "project-%s-command" command-type)))
+             ;; Ordre de priorité :
+             ;; 1. Variable locale au projet (.dir-locals.el ou hook)
+             ;; 2. Mapping standard par mode majeur
+             ;; 3. Chaîne vide en fallback
+             (suggested-command (or (when (boundp var-name) (symbol-value var-name))
+                                    (cdr (assq major-mode 
+                                               (if (eq command-type 'run)
+                                                   project-run-commands
+						 project-test-commands)))
+                                    ""))
+             (command (if prompt-user
+                          (read-string (format "%s command: " (capitalize (symbol-name command-type)))
+                                       suggested-command)
+			(or suggested-command
+                            (user-error "Don't know how to %s projects for %s" 
+					command-type major-mode)))))
+        (compile command))
+    (user-error "Not in a project")))
+
+  ;; Fonctions d'interface
+  (defun project-run () 
+    "Run project with appropriate command." 
+    (interactive) 
+    (project-execute-command 'run))
+
+  (defun project-run-with-command () 
+    "Run project with user-specified command."
+    (interactive) 
+    (project-execute-command 'run t))
+
+  (defun project-test () 
+    "Test project with appropriate command."
+    (interactive) 
+    (project-execute-command 'test))
+
+  (defun project-test-with-command () 
+    "Test project with user-specified command."
+    (interactive) 
+    (project-execute-command 'test t))
+
+  ;; Bind to project keymap
+  (define-key project-prefix-map "r" #'project-run)           ; C-x p r
+  (define-key project-prefix-map "t" #'project-test)          ; C-x p t
+  (define-key project-prefix-map "R" #'project-run-with-command)) ; C-x p R
+
+;; overridable with .dir-locals.el					;
+;;; For a PHP Laravel project (.dir-locals.el)
+;((php-mode . ((project-run-command . "php artisan serve")
+;              (project-test-command . "php artisan test"))))
 
 ;;; PHP
 ;(with npm language server)
@@ -941,6 +1182,50 @@
 (use-package web-mode
   :ensure t)
 
+;;; CSharp
+;; built-in package, no :ensure t
+(use-package csharp-mode
+  :hook (csharp-mode . eglot-ensure)
+  :hook ((csharp-mode . (lambda ()
+			  (when (project-current)
+;			  (setq-local compile-command (csharp-detect-project-command 'build))
+			  (setq-local compile-command "dotnet build")
+                          (setq-local project-run-command 
+                                     (csharp-detect-project-command 'run))
+                          (setq-local project-test-command 
+                                      (csharp-detect-project-command 'test))))))
+  
+  :config
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs
+                 '(csharp-mode . ("omnisharp" "-lsp"))))
+
+  ;; Détection spéciale C# pour les projets avec .csproj dans sous-dossier
+  (defun csharp-detect-project-command (command-type)
+    "Detect C# project command, handling .csproj in subdirectories."
+    (let ((root (project-root (project-current))))
+      (cond
+       ;; .csproj direct dans root -> commande standard
+       ((directory-files root nil "\\.csproj$")
+        (format "dotnet %s" command-type))
+       ;; .csproj dans sous-dossier -> utiliser --project
+       ((cl-some (lambda (subdir)
+                   (when (and (file-directory-p (expand-file-name subdir root))
+                             (not (string-prefix-p "." subdir))
+                             (directory-files (expand-file-name subdir root) nil "\\.csproj$"))
+                     subdir))
+                 (directory-files root nil nil t))
+        (format "dotnet %s --project %s" command-type
+                (cl-some (lambda (subdir)
+                           (when (and (file-directory-p (expand-file-name subdir root))
+                                     (not (string-prefix-p "." subdir))
+                                     (directory-files (expand-file-name subdir root) nil "\\.csproj$"))
+                             subdir))
+                         (directory-files root nil nil t))))
+       ;; Fallback sur les commandes standards
+       (t (format "dotnet %s" command-type)))))
+  )
+
 ;;; Powershell
 ; TreeSitter and Eglot
 ;; powershell handles file associations automatically (eglot with npm lang server)
@@ -950,7 +1235,7 @@
 
 
 
-;;; EGLOT
+;;; EGLOT LSP language server
 (use-package eglot
   :hook (yaml-ts-mode . (lambda ()
 			  (eglot-ensure)
@@ -1082,3 +1367,43 @@
     (setq magit-todos-scanner 'magit-todos--scan-with-git-grep)
     )
   )
+
+;;; Treemacs 
+; https://github.com/Alexander-Miller/treemacs?tab=readme-ov-file#installation
+(use-package treemacs
+  :ensure t
+  :defer t
+  :bind
+  (:map global-map
+        ("C-x t s"       . treemacs-select-window)
+        ("C-x t 1"   . treemacs-delete-other-windows)
+        ("C-x t t"   . treemacs)
+        ("C-x t d"   . treemacs-select-directory)
+        ("C-x t B"   . treemacs-bookmark)
+        ("C-x t C-t" . treemacs-find-file)
+        ("C-x t M-t" . treemacs-find-tag))
+)
+		
+(use-package treemacs-magit
+:after (treemacs magit)
+:ensure t)
+
+;; Enable outline-minor-mode where needed
+(add-hook 'text-mode-hook 'outline-minor-mode)
+(add-hook 'prog-mode-hook 'outline-minor-mode)
+
+;; Universal outline functions (minimal)
+(defun show-all-universal ()
+  (interactive)
+  (if (derived-mode-p 'org-mode) (org-show-all) (outline-show-all)))
+
+(defun hide-levels-universal (n)
+  (interactive "p")
+  (if (derived-mode-p 'org-mode) (org-content n) (outline-hide-sublevels n)))
+
+;; Universal key bindings
+(global-set-key (kbd "C-c 0") 'show-all-universal)
+(global-set-key (kbd "C-c 1") (lambda() (interactive) (hide-levels-universal 1)))
+(global-set-key (kbd "C-c 2") (lambda() (interactive) (hide-levels-universal 2)))
+(global-set-key (kbd "C-c 3") (lambda() (interactive) (hide-levels-universal 3)))
+(global-set-key (kbd "C-c 4") (lambda() (interactive) (hide-levels-universal 4)))
