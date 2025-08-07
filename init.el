@@ -1407,3 +1407,7 @@ If PROMPT-USER is non-nil, let user edit the command."
 (global-set-key (kbd "C-c 2") (lambda() (interactive) (hide-levels-universal 2)))
 (global-set-key (kbd "C-c 3") (lambda() (interactive) (hide-levels-universal 3)))
 (global-set-key (kbd "C-c 4") (lambda() (interactive) (hide-levels-universal 4)))
+
+;;; Git Version control
+;add files to log
+(setq vc-git-log-switches '("--name-status"))
