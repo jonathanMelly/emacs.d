@@ -720,6 +720,7 @@
 (global-set-key (kbd "<f1>") 'org-agenda-list)
 (global-set-key (kbd "<f2>") 'org-todo-list)
 (global-set-key (kbd "<f3>") 'other-window)
+(global-set-key (kbd "M-o") 'other-window) ;; tentative ?
 (global-set-key (kbd "S-<f4>") 'kill-buffer)
 (global-set-key (kbd "S-<f5>") 'diff-buffer-with-file)
 (global-set-key (kbd "S-<f6>") 'rg-menu) ;; 
