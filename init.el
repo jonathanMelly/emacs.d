@@ -52,7 +52,9 @@
 (use-package transient :ensure (:wait t))
 (use-package magit 
 	:ensure t
-	:config (setq magit-define-global-key-bindings "recommended")
+	:config
+	(setq magit-define-global-key-bindings "recommended")
+	(setq magit-auto-fetch t)
 	:bind
 	(
 		("C-x g" . magit-status)
@@ -910,7 +912,7 @@
 	
   :bind (:map markdown-mode-map
               ("C-c C-e" . markdown-do)
-			  ("C-c C-v d" . markdown-insert-fenced-code-block)
+			  ("C-c C-v d" . markdown-insert-gfm-code-block)
 	          ("C-c C-v c" . markdown-insert-code)
 	          ("C-<return>" . markdown-insert-header-respect-content)
               ("M-<left>" . markdown-promote)
@@ -1383,7 +1385,19 @@ If PROMPT-USER is non-nil, let user edit the command."
         ("C-x t B"   . treemacs-bookmark)
         ("C-x t C-t" . treemacs-find-file)
         ("C-x t M-t" . treemacs-find-tag))
-)
+  
+  :config
+  (define-key treemacs-mode-map (kbd "<right>") #'treemacs-TAB-action)
+  (define-key treemacs-mode-map (kbd "<left>") #'treemacs-TAB-action)
+  )
+; Allow having files in workspaces !!! ;-)
+(with-eval-after-load 'treemacs
+  (defadvice treemacs-toggle-node (around open-file-or-toggle activate)
+    (let* ((node (treemacs-node-at-point))
+           (path (treemacs-button-get node :path)))
+      (if (file-regular-p path)
+          (find-file path)
+        ad-do-it))))
 		
 (use-package treemacs-magit
 :after (treemacs magit)
@@ -1412,3 +1426,64 @@ If PROMPT-USER is non-nil, let user edit the command."
 ;;; Git Version control
 ;add files to log
 (setq vc-git-log-switches '("--name-status"))
+
+
+;;; Command frequencies
+(defvar my-command-frequencies (make-hash-table :test 'equal))
+(defvar my-command-frequency-file (expand-file-name "command-frequencies.el" user-emacs-directory))
+
+(defun my-record-command-advice (orig-fun &rest args)
+  "Record command frequency."
+  (when (commandp this-command)
+    (let ((cmd (symbol-name this-command)))
+      (puthash cmd (1+ (gethash cmd my-command-frequencies 0)) my-command-frequencies)))
+  (apply orig-fun args))
+
+(advice-add 'call-interactively :around #'my-record-command-advice)
+
+(defun my-save-frequencies ()
+  "Save frequencies to file."
+  (let ((frequencies '()))
+    (maphash (lambda (cmd count) (push (cons cmd count) frequencies)) my-command-frequencies)
+    (with-temp-file my-command-frequency-file
+      (insert (format "%S" frequencies)))))
+
+(defun my-load-frequencies ()
+  "Load frequencies from file."
+  (when (file-exists-p my-command-frequency-file)
+    (with-temp-buffer
+      (insert-file-contents my-command-frequency-file)
+      (let ((data (read (buffer-string))))
+        (clrhash my-command-frequencies)
+        (dolist (item data)
+          (puthash (car item) (cdr item) my-command-frequencies))))))
+
+(defun my-show-top-commands ()
+  "Show top 100 commands."
+  (interactive)
+  (let ((frequencies '()))
+    (maphash (lambda (cmd count) (push (cons cmd count) frequencies)) my-command-frequencies)
+    (setq frequencies (sort frequencies (lambda (a b) (> (cdr a) (cdr b)))))
+    (with-current-buffer (get-buffer-create "*Top Commands*")
+      (erase-buffer)
+      (insert "Top 100 Commands:\n\n")
+      (dotimes (i (min 100 (length frequencies)))
+        (let ((item (nth i frequencies)))
+          (insert (format "%5d  %s\n" (cdr item) (car item)))))
+      (goto-char (point-min))
+      (display-buffer (current-buffer)))))
+
+(add-hook 'kill-emacs-hook #'my-save-frequencies)
+(my-load-frequencies)
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(safe-local-variable-directories '("c:/ws/home/org/")))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
