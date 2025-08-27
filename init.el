@@ -1428,53 +1428,53 @@ If PROMPT-USER is non-nil, let user edit the command."
 (setq vc-git-log-switches '("--name-status"))
 
 
-;;; Command frequencies
-(defvar my-command-frequencies (make-hash-table :test 'equal))
-(defvar my-command-frequency-file (expand-file-name "command-frequencies.el" user-emacs-directory))
+;;; Command frequencies (stats) not well working ?
+;; (defvar my-command-frequencies (make-hash-table :test 'equal))
+;; (defvar my-command-frequency-file (expand-file-name "command-frequencies.el" user-emacs-directory))
 
-(defun my-record-command-advice (orig-fun &rest args)
-  "Record command frequency."
-  (when (commandp this-command)
-    (let ((cmd (symbol-name this-command)))
-      (puthash cmd (1+ (gethash cmd my-command-frequencies 0)) my-command-frequencies)))
-  (apply orig-fun args))
+;; (defun my-record-command-advice (orig-fun &rest args)
+;;   "Record command frequency."
+;;   (when (commandp this-command)
+;;     (let ((cmd (symbol-name this-command)))
+;;       (puthash cmd (1+ (gethash cmd my-command-frequencies 0)) my-command-frequencies)))
+;;   (apply orig-fun args))
 
-(advice-add 'call-interactively :around #'my-record-command-advice)
+;; (defun my-save-frequencies ()
+;;   "Save frequencies to file."
+;;   (let ((frequencies '()))
+;;     (maphash (lambda (cmd count) (push (cons cmd count) frequencies)) my-command-frequencies)
+;;     (with-temp-file my-command-frequency-file
+;;       (insert (format "%S" frequencies)))))
 
-(defun my-save-frequencies ()
-  "Save frequencies to file."
-  (let ((frequencies '()))
-    (maphash (lambda (cmd count) (push (cons cmd count) frequencies)) my-command-frequencies)
-    (with-temp-file my-command-frequency-file
-      (insert (format "%S" frequencies)))))
+;; (defun my-load-frequencies ()
+;;   "Load frequencies from file."
+;;   (when (file-exists-p my-command-frequency-file)
+;;     (with-temp-buffer
+;;       (insert-file-contents my-command-frequency-file)
+;;       (let ((data (read (buffer-string))))
+;;         (clrhash my-command-frequencies)
+;;         (dolist (item data)
+;;           (puthash (car item) (cdr item) my-command-frequencies))))))
 
-(defun my-load-frequencies ()
-  "Load frequencies from file."
-  (when (file-exists-p my-command-frequency-file)
-    (with-temp-buffer
-      (insert-file-contents my-command-frequency-file)
-      (let ((data (read (buffer-string))))
-        (clrhash my-command-frequencies)
-        (dolist (item data)
-          (puthash (car item) (cdr item) my-command-frequencies))))))
+;; (defun my-show-top-commands ()
+;;   "Show top 100 commands."
+;;   (interactive)
+;;   (let ((frequencies '()))
+;;     (maphash (lambda (cmd count) (push (cons cmd count) frequencies)) my-command-frequencies)
+;;     (setq frequencies (sort frequencies (lambda (a b) (> (cdr a) (cdr b)))))
+;;     (with-current-buffer (get-buffer-create "*Top Commands*")
+;;       (erase-buffer)
+;;       (insert "Top 100 Commands:\n\n")
+;;       (dotimes (i (min 100 (length frequencies)))
+;;         (let ((item (nth i frequencies)))
+;;           (insert (format "%5d  %s\n" (cdr item) (car item)))))
+;;       (goto-char (point-min))
+;;       (display-buffer (current-buffer)))))
 
-(defun my-show-top-commands ()
-  "Show top 100 commands."
-  (interactive)
-  (let ((frequencies '()))
-    (maphash (lambda (cmd count) (push (cons cmd count) frequencies)) my-command-frequencies)
-    (setq frequencies (sort frequencies (lambda (a b) (> (cdr a) (cdr b)))))
-    (with-current-buffer (get-buffer-create "*Top Commands*")
-      (erase-buffer)
-      (insert "Top 100 Commands:\n\n")
-      (dotimes (i (min 100 (length frequencies)))
-        (let ((item (nth i frequencies)))
-          (insert (format "%5d  %s\n" (cdr item) (car item)))))
-      (goto-char (point-min))
-      (display-buffer (current-buffer)))))
+;(advice-add 'call-interactively :around #'my-record-command-advice)
+;(add-hook 'kill-emacs-hook #'my-save-frequencies)
+;(my-load-frequencies)
 
-(add-hook 'kill-emacs-hook #'my-save-frequencies)
-(my-load-frequencies)
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
