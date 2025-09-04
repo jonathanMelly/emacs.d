@@ -54,7 +54,7 @@
 	:ensure t
 	:config
 	(setq magit-define-global-key-bindings "recommended")
-	(setq magit-auto-fetch t)
+	;(setq magit-auto-fetch t) does it exist ?
 	:bind
 	(
 		("C-x g" . magit-status)
@@ -729,6 +729,9 @@
 (global-set-key (kbd "S-<f10>") 'save-buffer)
 (global-set-key (kbd "S-<f11>") 'toggle-frame-fullscreen) ;; as f11 is for @...
 
+
+(global-set-key (kbd "C-c l") 'org-toggle-link-display)
+
 ;; Try to facilitate using emacs default keybindings with my custom bépo+kana in
 ;; which all these characters are typed with vkoem8 "kana" key which does not seem
 ;; to work with modifier keys...
@@ -1363,7 +1366,7 @@ If PROMPT-USER is non-nil, let user edit the command."
   :ensure t
   :after (magit hl-todo)
   :config
-  (magit-todos-mode 1)
+  ;(magit-todos-mode 1) ;inactive by default
   (when (eq system-type 'windows-nt) ;windows rg issue https://github.com/alphapapa/magit-todos/issues/29
 					;(setq magit-todos-scanner 'magit-todos--scan-with-grep)
     (setq magit-todos-nice nil)
@@ -1475,15 +1478,47 @@ If PROMPT-USER is non-nil, let user edit the command."
 ;(add-hook 'kill-emacs-hook #'my-save-frequencies)
 ;(my-load-frequencies)
 
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(safe-local-variable-directories '("c:/ws/home/org/")))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
+;; (custom-set-variables
+;;  ;; custom-set-variables was added by Custom.
+;;  ;; If you edit it by hand, you could mess it up, so be careful.
+;;  ;; Your init file should contain only one such instance.
+;;  ;; If there is more than one, they won't work right.
+;;  '(safe-local-variable-directories '("c:/ws/home/org/")))
+;; (custom-set-faces
+;;  ;; custom-set-faces was added by Custom.
+;;  ;; If you edit it by hand, you could mess it up, so be careful.
+;;  ;; Your init file should contain only one such instance.
+;;  ;; If there is more than one, they won't work right.
+;;  )
+
+
+;;; AI  Minimal gptel with Claude as default
+(use-package gptel
+  :ensure (:host github :repo "karthink/gptel")
+  :config
+  ;; Set Claude as default backend
+  ;; (setq gptel-backend (gptel-make-anthropic "Claude"
+  ;;                       :stream t
+  ;;                       :key #'gptel-api-key-from-auth-source))
+  ;; Set Claude Sonnet 4 as default backend and model
+  (setq gptel-model 'claude-sonnet-4-20250514  ; Claude Sonnet 4
+        gptel-backend (gptel-make-anthropic "Claude"
+                        :stream t
+                        :key #'gptel-api-key-from-auth-source)
+	gptel-default-mode #'org-mode
+	gptel-org-branching-context t
+	)
+  (setf (alist-get 'org-mode gptel-prompt-prefix-alist) "@user\n")
+  (setf (alist-get 'org-mode gptel-response-prefix-alist) "@assistant\n")
+  
+  ;; Add other backends here as needed:
+  ;; (gptel-make-openai "OpenAI" :stream t :key #'gptel-api-key-from-auth-source)
+  ;; (gptel-make-gemini "Gemini" :stream t :key #'gptel-api-key-from-auth-source)
+  ;; (gptel-make-ollama "Ollama" :stream t :host "localhost:11434")
+  
+  ;; gptel doesn't set global bindings by default, so these are safe to add
+  :bind (("C-c g" . gptel)
+         ("C-c G" . gptel-send)
+	 ("C-c M-g" . gptel-menu)
+	 ("C-c C-g" . gptel-request)
+	 ))
