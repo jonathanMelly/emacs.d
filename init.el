@@ -889,6 +889,31 @@
     (ispell-change-dictionary choice)
     (message "Dictionary: %s" choice)))
 
+;;; Flyspell consult/vertico integration
+
+; this adds candidates + dictionary options (auto through vertico)
+(use-package flyspell-correct
+  :ensure t
+  :after flyspell
+  :bind (:map flyspell-mode-map
+              ;; Replace flyspell's built-in correction functions with flyspell-correct
+              ("C-." . flyspell-correct-at-point)        ; was flyspell-auto-correct-word
+              ("C-M-i" . flyspell-correct-at-point)      ; was flyspell-auto-correct-word (M-TAB)  
+              ("C-c $" . flyspell-correct-wrapper))      ; was flyspell-correct-word-before-point
+)
+
+(use-package consult-flyspell
+  :ensure t  
+  :after (consult flyspell)
+  :bind (:map flyspell-mode-map
+              ("C-c C-s" . consult-flyspell))
+  :config
+  (setq consult-flyspell-select-function 'flyspell-correct-at-point
+        ;consult-flyspell-set-point-after-word t ; this is default
+        ;consult-flyspell-always-check-buffer nil) ; this is also default
+	)
+ )
+
 
 ;;; Recent files
 (recentf-mode 1)
