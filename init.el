@@ -179,6 +179,9 @@
 ;;Shortcut
 (global-set-key (kbd "C-c a") 'org-agenda)
 
+;;; Org indent
+(setq org-startup-indented t)
+
 
 
 ;;; Windows
@@ -484,7 +487,13 @@
   :custom
   (completion-styles '(orderless basic))
   (completion-category-overrides '((file (styles basic partial-completion))))
-  (orderless-matching-styles '(orderless-literal orderless-regexp orderless-flex)))
+  (orderless-matching-styles '(orderless-literal orderless-regexp orderless-flex orderless-initialism))
+  ;; Smart case: case-insensitive unless you type uppercase
+  (orderless-smart-case t)  ; This makes it case-insensitive unless you type uppercase
+  )
+
+;to make eglot also ignore case...
+(setq completion-ignore-case  t)
 
 ;;; Marginalia
 (use-package marginalia :ensure t
@@ -719,14 +728,14 @@
 
 
 ;;; Key bindings
-(global-set-key (kbd "<f1>") 'org-agenda-list)
-(global-set-key (kbd "<f2>") 'org-todo-list)
-(global-set-key (kbd "<f3>") 'other-window)
-(global-set-key (kbd "M-o") 'other-window) ;; tentative ?
+;(global-set-key (kbd "<f1>") 'org-agenda-list)
+;(global-set-key (kbd "<f2>") 'org-todo-list)
+(global-set-key (kbd "<f3>") 'ace-window)
+;(global-set-key (kbd "M-o") 'other-window) ;; tentative ?
 (global-set-key (kbd "S-<f4>") 'kill-buffer)
 (global-set-key (kbd "S-<f5>") 'diff-buffer-with-file)
-(global-set-key (kbd "S-<f6>") 'rg-menu) ;; 
-(global-set-key (kbd "S-<f10>") 'save-buffer)
+;(global-set-key (kbd "S-<f6>") 'rg-menu) ;; 
+;(global-set-key (kbd "S-<f10>") 'save-buffer)
 (global-set-key (kbd "S-<f11>") 'toggle-frame-fullscreen) ;; as f11 is for @...
 
 
@@ -806,6 +815,23 @@
         (unless (or (member buf-name keep-buffers)
                     (string-prefix-p " " buf-name)) ; Skip special buffers that start with space
           (kill-buffer buf)))))))
+
+(defun my/toggle-org-fringe-arrows ()
+  "Toggle fringe continuation arrows in org-mode buffer."
+  (interactive)
+  (if (and (derived-mode-p 'org-mode)
+           (assq 'continuation fringe-indicator-alist))
+      (progn
+        (setq-local fringe-indicator-alist 
+                    (assq-delete-all 'continuation fringe-indicator-alist))
+        (message "Org fringe arrows disabled"))
+    (if (derived-mode-p 'org-mode)
+        (progn
+          (setq-local fringe-indicator-alist
+                      (cons '(continuation right-arrow left-arrow)
+                            fringe-indicator-alist))
+          (message "Org fringe arrows enabled"))
+      (message "Not in org-mode buffer"))))
 
 
 ;;; Wakatime
@@ -1361,6 +1387,22 @@ If PROMPT-USER is non-nil, let user edit the command."
   :hook (magit-mode . magit-delta-mode))
 
 ;;; Magit todo
+
+; sort by todo number
+(defun my/magit-todos--sort-by-number (a b)
+  "Sort todos by number prefix in the item text."
+  (let* ((desc-a (magit-todos-item-description a))
+         (desc-b (magit-todos-item-description b))
+         (num-a (when (string-match "^\\([0-9]+\\)" desc-a)
+                  (string-to-number (match-string 1 desc-a))))
+         (num-b (when (string-match "^\\([0-9]+\\)" desc-b)
+                  (string-to-number (match-string 1 desc-b)))))
+    (if (and num-a num-b)
+        (< num-a num-b)
+      ;; If one or both don't have numbers, fall back to string comparison
+      (string< desc-a desc-b))))
+
+
 ;; Append todos in magit status
 (use-package magit-todos
   :ensure t
@@ -1372,6 +1414,8 @@ If PROMPT-USER is non-nil, let user edit the command."
     (setq magit-todos-nice nil)
     (setq magit-todos-scanner 'magit-todos--scan-with-git-grep)
     )
+  ;(setq magit-todos-sort-function '(my/magit-todos--sort-by-number))
+  (setq magit-todos-scan-untracked t)
   )
 
 ;;; Treemacs 
@@ -1522,3 +1566,17 @@ If PROMPT-USER is non-nil, let user edit the command."
 	 ("C-c M-g" . gptel-menu)
 	 ("C-c C-g" . gptel-request)
 	 ))
+
+(use-package drag-stuff
+  :ensure t
+
+  :config
+  (drag-stuff-global-mode 1)
+  (drag-stuff-define-keys)
+
+  ;; Disable in org-mode to avoid conflicts
+  :hook (org-mode . (lambda () (drag-stuff-mode -1)))
+  ;; Disable in markdown-mode to avoid conflicts
+  :hook (markdown-mode . (lambda () (drag-stuff-mode -1)))
+)
+
