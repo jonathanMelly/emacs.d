@@ -48,20 +48,58 @@
   (elpaca-use-package-mode))
   
 ;;; Magit
-;/!\ early as using a new transient version
+;/!\ early as magit is using a new transient version
 (use-package transient :ensure (:wait t))
 (use-package magit 
-	:ensure t
-	:config
-	(setq magit-define-global-key-bindings "recommended")
-	;(setq magit-auto-fetch t) does it exist ?
-	:bind
-	(
-		("C-x g" . magit-status)
-		("C-c g" . magit-dispatch)
-		("C-c f" . magit-file-dispatch)
-	)
-	)
+    :ensure t
+    :config
+    (setq magit-define-global-key-bindings "recommended")
+    ;(setq magit-auto-fetch t) does it exist ?
+    
+    ;; Store the hooks that are REMOVED for fast mode
+    (defvar magit-removed-hooks-for-fast
+      '(magit-insert-head-branch-header
+        magit-insert-upstream-branch-header
+        magit-insert-push-branch-header
+        magit-insert-tags-header
+        magit-insert-status-headers
+        magit-insert-unpushed-to-pushremote
+        magit-insert-unpushed-to-upstream-or-recent
+        magit-insert-unpulled-from-pushremote
+        magit-insert-unpulled-from-upstream))
+    
+    ;; Start in fast mode
+    (dolist (hook magit-removed-hooks-for-fast)
+      (remove-hook 'magit-status-sections-hook hook))
+    
+    ;; Toggle and refresh function
+    (defun magit-toggle-fast-status-and-refresh ()
+      "Toggle between fast and full magit status, then refresh."
+      (interactive)
+      (if (memq 'magit-insert-head-branch-header magit-status-sections-hook)
+          ;; Currently full, switch to fast
+          (progn
+            (dolist (hook magit-removed-hooks-for-fast)
+              (remove-hook 'magit-status-sections-hook hook))
+	    (setq magit-commit-show-diff nil)
+            (message "Magit fast status enabled"))
+        ;; Currently fast, switch to full  
+        (progn
+          (dolist (hook magit-removed-hooks-for-fast)
+            (add-hook 'magit-status-sections-hook hook))
+	  (setq magit-commit-show-diff t)
+          (message "Magit full status enabled")))
+      ;; Always refresh after toggling
+      (magit-refresh))
+
+    ;; Add key binding in magit-status-mode
+    (with-eval-after-load 'magit
+      (define-key magit-status-mode-map (kbd "a") #'magit-toggle-fast-status-and-refresh))
+    
+    :bind
+    (("C-x g" . magit-status)
+     ("C-c g" . magit-dispatch)
+     ("C-c f" . magit-file-dispatch)))
 
 ;;source : flykeys.el
 ;; UTF-8 as default encoding
