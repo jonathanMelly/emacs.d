@@ -1004,6 +1004,172 @@
 
 (use-package denote-markdown :ensure t)
 
+;;; markdown-smart-links.el --- Autocompletion intelligente de liens markdown
+
+(defvar markdown-smart-links-search-paths
+  '("." "~/Documents" "~/Notes")
+  "Chemins de recherche pour les fichiers markdown.")
+
+(defun markdown-smart-links--collect-md-files ()
+  "Collecte tous les fichiers .md disponibles."
+  (let ((files '()))
+    ;; Projet actuel
+    (when (and (fboundp 'project-current) (project-current))
+      (setq files (append files 
+                          (directory-files-recursively 
+                           (project-root (project-current)) "\\.md$"))))
+    ;; Buffers ouverts
+    (dolist (buffer (buffer-list))
+      (when (and (buffer-file-name buffer)
+                 (string-match-p "\\.md$" (buffer-file-name buffer)))
+        (push (buffer-file-name buffer) files)))
+    ;; Chemins configurés
+    (dolist (path markdown-smart-links-search-paths)
+      (when (file-directory-p (expand-file-name path))
+        (setq files (append files 
+                            (directory-files-recursively 
+                             (expand-file-name path) "\\.md$")))))
+    ;; Historique récent
+    (when (bound-and-true-p recentf-list)
+      (dolist (file recentf-list)
+        (when (string-match-p "\\.md$" file)
+          (push file files))))
+    (delete-dups files)))
+
+(defun markdown-smart-links--extract-headings (file)
+  "Extrait les headings d'un fichier markdown."
+  (when (file-readable-p file)
+    (with-temp-buffer
+      (insert-file-contents file)
+      (let ((headings '()))
+        (goto-char (point-min))
+        (while (re-search-forward "^\\(#+\\)\\s-+\\(.+\\)$" nil t)
+          (let ((level (length (match-string 1)))
+                (title (string-trim (match-string 2))))
+            (push (cons (format "%s %s" (make-string level ?#) title) title) 
+                  headings)))
+        (nreverse headings)))))
+
+(defun markdown-smart-links--format-candidate (file)
+  "Formate un fichier pour l'affichage."
+  (let* ((relative (file-relative-name file))
+         (basename (file-name-nondirectory file))
+         (dir (file-name-directory relative)))
+    (concat basename
+            (when dir (propertize (concat " (" dir ")") 'face 'font-lock-comment-face))
+            (when (get-file-buffer file) 
+              (propertize " [ouvert]" 'face 'success)))))
+
+(defun markdown-smart-links--choose-heading (file)
+  "Choisit un heading dans un fichier."
+  (let ((headings (markdown-smart-links--extract-headings file)))
+    (when headings
+      (cdr (assoc (completing-read "Heading (optionnel): " 
+                                  (cons '("" . "") headings) nil nil) 
+                 headings)))))
+
+(defun markdown-smart-links--get-link-at-point ()
+  "Retourne les données du lien markdown à la position du curseur.
+Retourne une plist avec :text, :url, :start, :end ou nil si pas de lien."
+  (save-excursion
+    (let ((pos (point))
+          (result nil))
+      ;; D'abord vérifier si on est dans un lien selon markdown-mode
+      (when (markdown-link-p)
+        ;; Chercher le lien qui contient le curseur
+        (beginning-of-line)
+        (while (and (not result) 
+                    (re-search-forward "\\[\\([^]]*\\)\\](\\([^)]*\\))" (line-end-position) t))
+          (let ((link-start (match-beginning 0))
+                (link-end (match-end 0))
+                (text (match-string 1))
+                (url (match-string 2)))
+            ;; Si le curseur est dans ce lien, on l'a trouvé
+            (when (and (>= pos link-start) (<= pos link-end))
+              (setq result (list :text (substring-no-properties text) 
+                                :url (substring-no-properties url) 
+                                :start link-start 
+                                :end link-end)))))
+        result))))
+
+(defun markdown-smart-insert-link ()
+  "Version intelligente de markdown-insert-link avec autocomplétion."
+  (interactive)
+  (let* ((link-data (markdown-smart-links--get-link-at-point))
+         (existing-text (plist-get link-data :text))
+         (existing-url (plist-get link-data :url))
+         (link-start (plist-get link-data :start))
+         (link-end (plist-get link-data :end))
+         (files (markdown-smart-links--collect-md-files))
+         (candidates (mapcar (lambda (f) 
+                              (cons (markdown-smart-links--format-candidate f) f))
+                            files))
+         ;; Pré-remplir le champ avec l'URL existante pour permettre la modification
+         (choice (completing-read "Lien vers: " candidates nil nil existing-url))
+         (selected (cdr (assoc choice candidates)))
+         ;; Si pas trouvé dans les candidats, vérifier si c'est un fichier existant
+         (is-file (when (and (not selected) (not (string-empty-p choice)))
+                   (let ((abs-path (if (file-name-absolute-p choice)
+                                      choice
+                                    (expand-file-name choice (file-name-directory (buffer-file-name))))))
+                     (and (file-exists-p abs-path) 
+                          (string-match-p "\\.mdx?$" abs-path)
+                          abs-path)))))
+    
+    ;; Procéder seulement si on a une sélection valide
+    (when (or selected is-file (not (string-empty-p choice)))
+      
+      (if (or selected is-file)
+          ;; Fichier sélectionné - demander heading et texte
+          (let* ((target-file (or selected is-file))
+                 (heading (markdown-smart-links--choose-heading target-file))
+                 (current-file (buffer-file-name))
+                 (link-target (if current-file
+                                 (file-relative-name target-file (file-name-directory current-file))
+                               target-file))
+                 (anchor (if (and heading (not (string-empty-p heading)))
+                            (concat "#" (replace-regexp-in-string 
+                                        "[^a-zA-Z0-9-]" "-" (downcase heading)))
+                          ""))
+                 ;; Pré-remplir le texte avec l'existant ou une valeur par défaut
+                 (default-text (or existing-text
+                                  (if (string-empty-p anchor)
+                                      (file-name-base target-file) 
+                                    heading)))
+                 (text (read-string "Texte du lien (optionnel): " default-text))
+                 (final-text (if (string-empty-p text)
+                                default-text
+                              text)))
+            ;; Tout s'est bien passé, on peut maintenant supprimer l'ancien lien et insérer le nouveau
+            (when (and link-start link-end)
+              (delete-region link-start link-end))
+            (insert (format "[%s](%s%s)" final-text link-target anchor)))
+        
+        ;; Saisie libre - insérer manuellement
+        (let* ((text (read-string "Texte du lien (optionnel): " 
+                                 (or existing-text choice)))
+               (final-text (if (string-empty-p text) choice text)))
+          ;; Tout s'est bien passé, on peut maintenant supprimer l'ancien lien et insérer le nouveau
+          (when (and link-start link-end)
+            (delete-region link-start link-end))
+          (insert (format "[%s](%s)" final-text choice)))))))
+
+
+(defun markdown-smart-links-setup ()
+  "Configure l'autocomplétion pour markdown-mode."
+  ;; Remplacer le raccourci natif par notre version intelligente
+  (define-key markdown-mode-map (kbd "C-c C-l") #'markdown-smart-insert-link))
+
+(defun markdown-smart-links-remove ()
+  "Supprime l'autocomplétion personnalisée."
+  (interactive)
+  ;; Restaurer le raccourci original
+  (define-key markdown-mode-map (kbd "C-c C-l") #'markdown-insert-link))
+
+;; Auto-setup
+(with-eval-after-load 'markdown-mode
+  (markdown-smart-links-setup))
+
 ;; mimic org-download-paste...
 (defun markdown-paste-clipboard-image ()
   "Save clipboard image to images folder and insert markdown link.
