@@ -1422,10 +1422,15 @@ If PROMPT-USER is non-nil, let user edit the command."
                   (string-to-number (match-string 1 desc-a))))
          (num-b (when (string-match "^\\([0-9]+\\)" desc-b)
                   (string-to-number (match-string 1 desc-b)))))
-    (if (and num-a num-b)
-        (< num-a num-b)
-      ;; If one or both don't have numbers, fall back to string comparison
-      (string< desc-a desc-b))))
+    (cond
+     ;; Both have numbers - compare numerically
+     ((and num-a num-b) (< num-a num-b))
+     ;; Only A has number - A comes first
+     (num-a t)
+     ;; Only B has number - B comes first  
+     (num-b nil)
+     ;; Neither has number - fallback to string comparison
+     (t (string< desc-a desc-b)))))
 
 
 ;; Append todos in magit status
@@ -1439,7 +1444,9 @@ If PROMPT-USER is non-nil, let user edit the command."
     (setq magit-todos-nice nil)
     (setq magit-todos-scanner 'magit-todos--scan-with-git-grep)
     )
-  ;(setq magit-todos-sort-function '(my/magit-todos--sort-by-number))
+  (setq magit-todos-sort-order '(my/magit-todos--sort-by-number
+                                 magit-todos--sort-by-filename
+                                 magit-todos--sort-by-position))
   (setq magit-todos-scan-untracked t)
   )
 
