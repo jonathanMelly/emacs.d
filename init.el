@@ -1737,3 +1737,4 @@ Returns a VC project if .git/.hg/.svn exists, transient otherwise."
   :hook (markdown-mode . (lambda () (drag-stuff-mode -1)))
 )
 
+(global-set-key (kbd "C-c j v") 'visual-line-mode)
