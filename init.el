@@ -101,6 +101,14 @@
      ("C-c g" . magit-dispatch)
      ("C-c f" . magit-file-dispatch)))
 
+;;; VC custom with treemacs
+(defun my/treemacs-refresh-current-file ()
+  "Refresh current file's VC state in treemacs."
+  (when (and (treemacs-get-local-window) buffer-file-name)
+    (treemacs-refresh-single-node buffer-file-name)))
+
+(add-hook 'vc-checkin-hook #'my/treemacs-refresh-current-file)
+
 ;;source : flykeys.el
 ;; UTF-8 as default encoding
 ;(set-language-environment 'utf-8)
