@@ -511,8 +511,9 @@
   (add-to-list 'consult-buffer-sources 'consult--source-modified-buffer)
 
   ; Not realy checked if realy better
-  ;(setq consult-ripgrep-args
-;	"rg --null --line-buffered --color=never --max-columns=1000 --path-separator / --smart-case --no-heading --line-number -M 500")
+  ;but often rg crashes / blocks emacs
+  (setq consult-ripgrep-args
+	"rg --null --line-buffered --color=never --max-columns=1000 --path-separator / --smart-case --no-heading --line-number -M 500"); it 
   
   ;; Enable automatic preview at point in the *Completions* buffer. This is
   ;; relevant when you use the default completion UI.
