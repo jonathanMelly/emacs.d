@@ -1680,20 +1680,38 @@ Returns a VC project if .git/.hg/.svn exists, transient otherwise."
 (use-package gptel
   :ensure (:host github :repo "karthink/gptel")
   :config
-  ;; Set Claude as default backend
-  ;; (setq gptel-backend (gptel-make-anthropic "Claude"
-  ;;                       :stream t
-  ;;                       :key #'gptel-api-key-from-auth-source))
-  ;; Set Claude Sonnet 4 as default backend and model
-  (setq gptel-model 'claude-sonnet-4-20250514  ; Claude Sonnet 4
+  ;; Define web tools for Anthropic
+  (setq gptel-tools
+        (list 
+         (gptel-make-tool
+          :name "web_search"
+          :function (lambda (query)
+                      (json-serialize `(:query ,query)))
+          :description "Search the web for current information"
+          :args '((:name "query" :type string))
+          :category "web")
+         
+         (gptel-make-tool
+          :name "web_fetch"
+          :function (lambda (url)
+                      (json-serialize `(:url ,url)))
+          :description "Fetch content from a URL"
+          :args '((:name "url" :type string))
+          :category "web")))
+  
+  ;; Set Claude Sonnet 4 as default backend and model with web tools
+  (setq gptel-model 'claude-sonnet-4-20250514
         gptel-backend (gptel-make-anthropic "Claude"
                         :stream t
-                        :key #'gptel-api-key-from-auth-source)
-	gptel-default-mode #'org-mode
-	gptel-org-branching-context t
-	)
-  (setf (alist-get 'org-mode gptel-prompt-prefix-alist) "@user\n")
-  (setf (alist-get 'org-mode gptel-response-prefix-alist) "@assistant\n")
+                        :key #'gptel-api-key-from-auth-source
+                        :request-params '(:tools [(:type "web_search_20250305" 
+							 :name "web_search"
+							 :max_uses 3)])))
+
+  ;; available tools : 'bash_20250124', 'custom', 'text_editor_20250124', 'text_editor_20250429', 'text_editor_20250728', 'web_search_20250305'
+        
+  (setf (alist-get 'org-mode gptel-prompt-prefix-alist) "@me\n")
+  (setf (alist-get 'org-mode gptel-response-prefix-alist) "@mac\n")
   
   ;; Add other backends here as needed:
   ;; (gptel-make-openai "OpenAI" :stream t :key #'gptel-api-key-from-auth-source)
@@ -1701,11 +1719,10 @@ Returns a VC project if .git/.hg/.svn exists, transient otherwise."
   ;; (gptel-make-ollama "Ollama" :stream t :host "localhost:11434")
   
   ;; gptel doesn't set global bindings by default, so these are safe to add
-  :bind (("C-c g" . gptel)
-         ("C-c G" . gptel-send)
-	 ("C-c M-g" . gptel-menu)
-	 ("C-c C-g" . gptel-request)
-	 ))
+  :bind (("C-c q" . gptel)
+         ("C-c Q" . gptel-send)
+         ("C-c M-q" . gptel-menu)
+         ("C-c C-Q" . gptel-request)))
 
 (use-package drag-stuff
   :ensure t
