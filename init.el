@@ -1265,63 +1265,153 @@ Uses org-download configuration but works in markdown-mode."
     (newline)))
 
 ;;; project.el
-(defun project-find-by-markers (dir)
-  "Find project root by looking for marker files.
-Returns a VC project if .git/.hg/.svn exists, transient otherwise."
+(use-package project
+  :config
   
-  ;; First, check for VCS directories (these should create VC projects)
-  (let ((vc-root (cl-loop for vc-marker in '(".git" ".hg" ".svn")
-                          for root = (locate-dominating-file dir vc-marker)
-                          when root return root)))
-    (if vc-root
-        (cons 'vc vc-root)  ; Return VC project immediately
+  ;; N'interfère PAS avec la détection VC native d'Emacs
+  ;; Cette fonction ne s'active que si aucun projet VC n'est trouvé
+  (defun project-find-by-markers (dir)
+    "Find project root by looking for marker files.
+Only activates if no VC project is already detected.
+Returns a transient project for project.el compatibility."
+    
+    ;; IMPORTANT: Ne pas interférer avec la détection VC native
+    ;; Laisser Emacs gérer .git, .hg, .svn naturellement
+    (unless (or (locate-dominating-file dir ".git")
+                (locate-dominating-file dir ".hg") 
+                (locate-dominating-file dir ".svn"))
       
-      ;; If no VCS found, check other project markers
-      (let ((markers '(;; Project files (not VCS)
+      ;; Seulement si aucun VC n'est détecté, chercher d'autres marqueurs
+      (let ((markers '(;; .NET
                        ".sln"
                        ".csproj"
                        ".fsproj"
                        ".vbproj"
+                       ;; JavaScript/TypeScript
                        "package.json"
                        "tsconfig.json"
+                       ;; Rust
                        "Cargo.toml"
+                       ;; Go
                        "go.mod"
+                       ;; Java/JVM
                        "pom.xml"
                        "build.gradle"
                        "build.gradle.kts"
+                       ;; PHP
                        "composer.json"
                        "artisan"
                        "symfony.lock"
+                       ;; PowerShell
                        ".psd1"
                        ".psm1"
                        "PSScriptAnalyzerSettings.psd1"
+                       ;; Python
                        "requirements.txt"
                        "Pipfile"
                        "pyproject.toml"
                        "setup.py"
+                       ;; Ruby
                        "Gemfile"
                        "Rakefile"
+                       ;; Elixir
                        "mix.exs"
+                       ;; Clojure
                        "project.clj"
                        "deps.edn")))
-        (cl-loop for pattern in markers
-                 for root = (cond
-                             ;; Pattern starts with dot = extension pattern
-                             ((and (string-match "^\\.[^./]+$" pattern)
-                                   ;; But not VCS directories (already handled above)
-                                   (not (member pattern '(".git" ".hg" ".svn"))))
-                              (locate-dominating-file 
-                               dir
-                               (lambda (parent)
-                                 (directory-files parent nil
-                                                (concat ".*" (regexp-quote pattern) "$")
-                                                t))))
-                             ;; Exact filename or directory
-                             (t
-                              (locate-dominating-file dir pattern)))
-                 when root
-                 return (cons 'transient root))))))
-					; C-x p R
+        
+        (let ((found-root (cl-loop for pattern in markers
+                                   for root = (cond
+                                               ;; Pattern starts with dot = extension pattern
+                                               ((and (string-match "^\\.[^./]+$" pattern)
+                                                     (not (member pattern '(".git" ".hg" ".svn"))))
+                                                (locate-dominating-file 
+                                                 dir
+                                                 (lambda (parent)
+                                                   (when (and parent (file-directory-p parent))
+                                                     (directory-files parent nil
+                                                                      (concat ".*" (regexp-quote pattern) "$"))))))
+                                               ;; Exact filename
+                                               (t
+                                                (locate-dominating-file dir pattern)))
+                                   when (and root (stringp root) (file-directory-p root))
+                                   return (file-name-as-directory root))))
+          
+          ;; Retourner un projet transient valide seulement si trouvé
+          (when found-root
+            (cons 'transient found-root))))))
+
+  ;; Ajouter APRÈS les détecteurs VC natifs (important !)
+  (add-hook 'project-find-functions #'project-find-by-markers 90)
+
+  ;; Rest of your project configuration...
+  (setq project-run-commands
+        '((csharp-mode . "dotnet run")
+          (php-mode . "php index.php")
+          (web-mode . "php index.php")
+          (powershell-mode . "pwsh ./main.ps1")
+          (javascript-mode . "npm start")
+          (js-mode . "npm start")
+          (js-ts-mode . "npm start")
+          (typescript-mode . "npm start")
+          (typescript-ts-mode . "npm start")
+          (rust-mode . "cargo run")
+          (rust-ts-mode . "cargo run")
+          (go-mode . "go run .")
+          (go-ts-mode . "go run .")
+          (java-mode . "mvn exec:java")
+          (kotlin-mode . "gradle run")
+          (python-mode . "python main.py")
+          (python-ts-mode . "python main.py")))
+
+  ;; Rest of your functions remain the same...
+  (defun project-execute-command (command-type &optional prompt-user)
+    "Execute project command of COMMAND-TYPE ('run or 'test).
+If PROMPT-USER is non-nil, let user edit the command."
+    (if-let ((project (project-current)))
+        (let* ((default-directory (project-root project))
+               (var-name (intern (format "project-%s-command" command-type)))
+               (suggested-command (or (when (boundp var-name) (symbol-value var-name))
+                                      (cdr (assq major-mode 
+                                                 (if (eq command-type 'run)
+                                                     project-run-commands
+                                                   project-test-commands)))
+                                      ""))
+               (command (if prompt-user
+                            (read-string (format "%s command: " (capitalize (symbol-name command-type)))
+                                         suggested-command)
+                          (or suggested-command
+                              (user-error "Don't know how to %s projects for %s" 
+                                          command-type major-mode)))))
+          (compile command))
+      (user-error "Not in a project")))
+  
+  ;; Fonctions d'interface
+  (defun project-run () 
+    "Run project with appropriate command." 
+    (interactive) 
+    (project-execute-command 'run))
+
+  (defun project-run-with-command () 
+    "Run project with user-specified command."
+    (interactive) 
+    (project-execute-command 'run t))
+
+  (defun project-test () 
+    "Test project with appropriate command."
+    (interactive) 
+    (project-execute-command 'test))
+
+  (defun project-test-with-command () 
+    "Test project with user-specified command."
+    (interactive) 
+    (project-execute-command 'test t))
+
+  ;; Bind to project keymap
+  (define-key project-prefix-map "t" #'project-run)           ; C-x p r conflicts with replace
+  (define-key project-prefix-map "T" #'project-test)          ; C-x p t (to be checked)
+					;(define-key project-prefix-map "R" #'project-run-with-command) ; C-x p R
+  )
 
 ;; overridable with .dir-locals.el					;
 ;;; For a PHP Laravel project (.dir-locals.el)
