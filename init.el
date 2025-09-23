@@ -192,7 +192,7 @@
                  :no-save nil
                  :immediate-finish nil
                  :kill-buffer t
-                 :jump-to-captured nil)
+                 :jump-to-captured t)
       )
 )
 
@@ -1690,14 +1690,16 @@ Returns a VC project if .git/.hg/.svn exists, transient otherwise."
           :description "Search the web for current information"
           :args '((:name "query" :type string))
           :category "web")
-         
-         (gptel-make-tool
-          :name "web_fetch"
-          :function (lambda (url)
-                      (json-serialize `(:url ,url)))
-          :description "Fetch content from a URL"
-          :args '((:name "url" :type string))
-          :category "web")))
+
+	 ; web_fetch doesnt seem to be available
+         ;; (gptel-make-tool
+         ;;  :name "web_fetch"
+         ;;  :function (lambda (url)
+         ;;              (json-serialize `(:url ,url)))
+         ;;  :description "Fetch content from a URL"
+         ;;  :args '((:name "url" :type string))
+         ;;  :category "web")
+	 ))
   
   ;; Set Claude Sonnet 4 as default backend and model with web tools
   (setq gptel-model 'claude-sonnet-4-20250514
