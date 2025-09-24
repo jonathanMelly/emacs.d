@@ -1853,3 +1853,11 @@ If PROMPT-USER is non-nil, let user edit the command."
 )
 
 (global-set-key (kbd "C-c j v") 'visual-line-mode)
+
+;;; Edit indirect: useful for any code fragment select and delete/change
+(use-package edit-indirect
+  :ensure t
+  :commands (edit-indirect-region))
+
+(use-package with-editor
+  :ensure t)
