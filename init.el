@@ -1660,12 +1660,35 @@ If PROMPT-USER is non-nil, let user edit the command."
         ("C-x t t"   . treemacs)
         ("C-x t d"   . treemacs-select-directory)
         ("C-x t B"   . treemacs-bookmark)
-        ("C-x t C-t" . treemacs-find-file)
+					;("C-x t C-t" . treemacs-find-file)
+					;(C-x t f    . treemacs-find-file-other-tab)
+        ("C-x t f" . my/treemacs-workspace-find-file)
         ("C-x t M-t" . treemacs-find-tag))
   
   :config
   (define-key treemacs-mode-map (kbd "<right>") #'treemacs-TAB-action)
   (define-key treemacs-mode-map (kbd "<left>") #'treemacs-TAB-action)
+  (defun my/treemacs-workspace-find-file ()
+    "Find file across all roots in current treemacs workspace."
+    (interactive)
+    (if-let ((workspace (treemacs-current-workspace)))
+	(let* ((projects (treemacs-workspace->projects workspace))
+               (root-paths (mapcar #'treemacs-project->path projects))
+               (all-files (apply #'append 
+                             (mapcar (lambda (root)
+                                       (directory-files-recursively root ".*" nil t))
+                                     root-paths)))
+	       (files (seq-filter (lambda (file)
+				    (let ((name (file-name-nondirectory file)))
+				      (and (not (backup-file-name-p name))
+					   (not (auto-save-file-name-p name))
+					   (not (string-prefix-p ".#" name))))) ; for lock files like .#file.txt
+				  all-files))
+	       )
+          (if files
+              (find-file (completing-read "File: " files nil t))
+            (message "No files found in workspace")))
+      (message "No treemacs workspace active")))
   )
 ; Allow having files in workspaces !!! ;-)
 (with-eval-after-load 'treemacs
