@@ -244,6 +244,7 @@
   :config
   ;; Enable default keybindings under C-c s prefix
   ;;(rg-enable-default-bindings)
+  ; use m-s R instead to group search features
   (setq rg-custom-type-aliases
       (append rg-custom-type-aliases
               '(("denoteExts" . "*.md *.txt *.org"))))
@@ -856,12 +857,13 @@
   "Kill all buffers except for *scratch*, *Messages*, and any other essential buffers."
   (interactive)
   (when (yes-or-no-p "Kill all buffers except essential ones? ")
-  (let ((keep-buffers '("*scratch*" "*Messages*" "*dashboard*")))
-    (dolist (buf (buffer-list))
-      (let ((buf-name (buffer-name buf)))
-        (unless (or (member buf-name keep-buffers)
-                    (string-prefix-p " " buf-name)) ; Skip special buffers that start with space
-          (kill-buffer buf)))))))
+    (let ((keep-buffers '("*scratch*" "*Messages*" "*dashboard*")))
+      (dolist (buf (buffer-list))
+        (let ((buf-name (buffer-name buf)))
+          (unless (or (member buf-name keep-buffers)
+                      (string-prefix-p " " buf-name)) ; Skip special buffers that start with space
+            (kill-buffer buf)))))
+    (switch-to-buffer "*scratch*")))
 
 (defun my/toggle-org-fringe-arrows ()
   "Toggle fringe continuation arrows in org-mode buffer."
@@ -1675,9 +1677,9 @@ If PROMPT-USER is non-nil, let user edit the command."
 	(let* ((projects (treemacs-workspace->projects workspace))
                (root-paths (mapcar #'treemacs-project->path projects))
                (all-files (apply #'append 
-                             (mapcar (lambda (root)
-                                       (directory-files-recursively root ".*" nil t))
-                                     root-paths)))
+				 (mapcar (lambda (root)
+					   (directory-files-recursively root ".*" nil t))
+					 root-paths)))
 	       (files (seq-filter (lambda (file)
 				    (let ((name (file-name-nondirectory file)))
 				      (and (not (backup-file-name-p name))
@@ -1689,7 +1691,47 @@ If PROMPT-USER is non-nil, let user edit the command."
               (find-file (completing-read "File: " files nil t))
             (message "No files found in workspace")))
       (message "No treemacs workspace active")))
+
+  ;; Fonction ripgrep pour workspace treemacs
+  ; Attention, pour les projet spéciaux avec juste 1 fichier, ajoute le dossier parent complet...
+  ; tentative avec --glob pas vraiment top
+  (defun my/treemacs-workspace-ripgrep (&optional use-consult)
+    "Search in all treemacs workspace projects."
+    (interactive "P")
+    (if-let* ((workspace (treemacs-current-workspace))
+              (projects (treemacs-workspace->projects workspace))
+              ;; Obtenir les répertoires (soit directs, soit parents des fichiers)
+              (paths (delete-dups
+                      (mapcar (lambda (path)
+				(if (file-directory-p path)
+                                    path
+                                  (file-name-directory path)))
+                              (mapcar #'treemacs-project->path projects)))))
+	(if use-consult
+            ;; Pour consult: utiliser le premier répertoire et ajouter les autres
+            (let ((consult-ripgrep-args
+                   (concat consult-ripgrep-args " "
+                           (mapconcat #'shell-quote-argument (cdr paths) " "))))
+              (consult-ripgrep (car paths)))
+          ;; Pour rg standard
+          (let ((pattern (read-string "Search for: ")))
+            (rg-run pattern "*" (car paths) nil nil 
+                    (mapcar #'shell-quote-argument (cdr paths)))))
+      (user-error "No treemacs workspace or projects")))
+
+  ;; Intégration rg-menu  
+  (with-eval-after-load 'rg
+    (transient-append-suffix 'rg-menu "d"
+      '("w" "Workspace" my/treemacs-workspace-ripgrep))
+    (transient-append-suffix 'rg-menu "w"
+      '("W" "Workspace (consult)" (lambda () (interactive) (my/treemacs-workspace-ripgrep t)))))
+
+
+  
+
+  
   )
+
 ; Allow having files in workspaces !!! ;-)
 (with-eval-after-load 'treemacs
   (defadvice treemacs-toggle-node (around open-file-or-toggle activate)
