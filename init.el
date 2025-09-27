@@ -192,7 +192,7 @@
                  :no-save nil
                  :immediate-finish nil
                  :kill-buffer t
-                 :jump-to-captured t)
+                 :jump-to-captured nil)
       )
 )
 
