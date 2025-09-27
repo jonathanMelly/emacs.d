@@ -451,6 +451,7 @@
          ("M-g k" . consult-global-mark)
          ("M-g i" . consult-imenu)
          ("M-g I" . consult-imenu-multi)
+	 ("M-g w" . consult-winner-history)  ;call custom defined func
          ;; M-s bindings in `search-map'
          ("M-s f" . consult-fd)                  ;; Alternative: consult-find
          ("M-s c" . consult-locate)
@@ -682,6 +683,90 @@
 
 ;;; Winner mode (ease of use with windows)
 (winner-mode 1)
+(defun consult-winner-history ()
+  "Browse and restore winner-mode history with live preview.
+Navigate through window configuration history with instant preview."
+  (interactive)
+  (require 'winner)
+  (require 'consult)
+  
+  (unless winner-mode
+    (user-error "Winner mode is not enabled. Run M-x winner-mode first"))
+  
+  (let* ((original-config (current-window-configuration))
+         (ring (winner-ring (selected-frame)))
+         (ring-length (if ring (ring-length ring) 0))
+         (candidates '()))
+    
+    (unless (and ring (> ring-length 0))
+      (user-error "No winner history available"))
+    
+    ;; Build candidates list with window configuration descriptions
+    (dotimes (i ring-length)
+      (let* ((entry (ring-ref ring i))
+             ;; Winner stores configurations as (config . point-alist)
+             ;; or sometimes just config, so we need to handle both
+             (config (if (consp entry) (car entry) entry))
+             (windows-info '())
+             (window-count 0))
+        
+        ;; Only process if we have a valid window configuration
+        (when (window-configuration-p config)
+          ;; Analyze configuration
+          (save-window-excursion
+            (set-window-configuration config)
+            (walk-windows
+             (lambda (win)
+               (setq window-count (1+ window-count))
+               (let* ((buf (window-buffer win))
+                      (buf-name (buffer-name buf))
+                      (buf-file (buffer-file-name buf)))
+                 (push (if buf-file
+                           (file-name-nondirectory buf-file)
+                         buf-name)
+                       windows-info)))
+             nil t))
+          
+          ;; Create candidate string
+          (let ((desc (format "%2d window%s | %s [-%d]"
+                             window-count
+                             (if (= window-count 1) "" "s")
+                             (string-join (reverse windows-info) ", ")
+                             (1+ i))))
+            (push (cons desc config) candidates)))))
+    
+    (unless candidates
+      (user-error "No valid window configurations in history"))
+    
+    ;; Restore original config before starting
+    (set-window-configuration original-config)
+    
+    ;; Read with preview
+    (condition-case nil
+        (let* ((selected
+                (consult--read
+                 (nreverse candidates)
+                 :prompt "Winner history: "
+                 :lookup #'consult--lookup-cdr
+                 :preview-key 'any  ; Instant preview on any movement
+                 :require-match t
+                 :sort nil
+                 :state (lambda (action cand)
+                         (pcase action
+                           ('preview
+                            (when cand
+                              (let ((config (cdr (assoc cand candidates))))
+                                (when (window-configuration-p config)
+                                  (set-window-configuration config)))))
+                           ('return
+                            (set-window-configuration original-config)))))))
+          (when selected
+            (set-window-configuration selected)
+            (message "Restored window configuration")))
+      (quit
+       ;; On quit, restore original configuration
+       (set-window-configuration original-config)
+       (message "Cancelled - restored original configuration")))))
 
 ;;; Emacs
 ;; Emacs minibuffer configurations.
