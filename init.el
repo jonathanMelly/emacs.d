@@ -1110,6 +1110,31 @@ Navigate through window configuration history with instant preview."
   (add-to-list 'auto-mode-alist '("\\.java\\'" . java-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
   (add-to-list 'auto-mode-alist '("\\.ya?ml\\'" . yaml-ts-mode)))
+
+;;; JSON
+;;; Configuration JSON avec support automatique des schémas
+;; Garder json-mode comme fallback si tree-sitter n'est pas disponible
+(use-package json-mode
+  :ensure t
+  :config
+  (setq json-reformat:indent-width 2))
+
+;; Configuration pour json-ts-mode (déjà configuré)
+;; Ajouter eglot pour json-ts-mode
+(when (fboundp 'json-ts-mode)
+  (add-hook 'json-ts-mode-hook #'eglot-ensure))
+
+;; Configuration eglot pour JSON Language Server
+(with-eval-after-load 'eglot
+  ;; Ajouter le JSON Language Server pour les deux modes
+  (add-to-list 'eglot-server-programs
+               '(json-mode . ("vscode-json-languageserver" "--stdio")))
+  (add-to-list 'eglot-server-programs
+               '(json-ts-mode . ("vscode-json-languageserver" "--stdio")))
+  
+  ;; Configuration pour supporter les schémas automatiquement
+  (setq-default eglot-workspace-configuration
+                '(:json (:schemas [] :validate (:enable t)))))
   
 ;;; Markdown
 ;https://jblevins.org/projects/markdown-mode/
