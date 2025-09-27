@@ -411,6 +411,7 @@
   :config
   ;;Mimic which-key but with C-h
   (add-to-list 'vertico-multiform-categories '(embark-keybinding grid))
+  (define-key vertico-map (kbd "C-o") #'toggle-orderless-in-minibuffer)
 )
 
 ;;; Consult
@@ -539,6 +540,29 @@
   ;; Smart case: case-insensitive unless you type uppercase
   (orderless-smart-case t)  ; This makes it case-insensitive unless you type uppercase
   )
+;; Toggle orderless en live pendant completion
+(defun toggle-orderless-in-minibuffer ()
+  "Toggle orderless completion style in current minibuffer session."
+  (interactive)
+  (when (minibufferp)
+    (let* ((contents (minibuffer-contents-no-properties))
+           (point-pos (- (point) (minibuffer-prompt-end))))
+      (if (memq 'orderless completion-styles)
+          (progn
+            (setq-local completion-styles '(basic partial-completion emacs22))
+            (minibuffer-message " [Orderless OFF]"))
+        (setq-local completion-styles '(orderless basic))
+        (minibuffer-message " [Orderless ON]"))
+      
+      ;; Restaurer le contenu et la position du curseur
+      (delete-minibuffer-contents)
+      (insert contents)
+      (goto-char (+ (minibuffer-prompt-end) (max 0 point-pos)))
+      
+      ;; Force une mise à jour des candidats
+      (when (and (boundp 'vertico--input) (fboundp 'vertico--update))
+        (setq vertico--input nil)
+        (vertico--update)))))
 
 ;to make eglot also ignore case...
 (setq completion-ignore-case  t)
