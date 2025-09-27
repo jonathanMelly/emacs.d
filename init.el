@@ -386,7 +386,7 @@
 )
 
 ;;activate notification of todos items
-(use-package org-wild-notifier :ensure t
+(use-package org-wild-notifier :ensure (:host github :repo "jonathanMelly/org-wild-notifier.el")
   :config
   (setq org-wild-notifier-alert-time '(1440 600 60 5 3))
   (setq org-wild-notifier-day-wide-alert-times '("07:00" "10:00" "12:00" "15:00" "17:30" "20:00"))
