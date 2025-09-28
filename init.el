@@ -50,56 +50,59 @@
 ;;; Magit
 ;/!\ early as magit is using a new transient version
 (use-package transient :ensure (:wait t))
+;;; with-editor (required by magit)
+(use-package with-editor :ensure t)
 (use-package magit 
-    :ensure t
-    :config
-    (setq magit-define-global-key-bindings "recommended")
-    ;(setq magit-auto-fetch t) does it exist ?
-    
-    ;; Store the hooks that are REMOVED for fast mode
-    (defvar magit-removed-hooks-for-fast
-      '(magit-insert-head-branch-header
-        magit-insert-upstream-branch-header
-        magit-insert-push-branch-header
-        magit-insert-tags-header
-        magit-insert-status-headers
-        magit-insert-unpushed-to-pushremote
-        magit-insert-unpushed-to-upstream-or-recent
-        magit-insert-unpulled-from-pushremote
-        magit-insert-unpulled-from-upstream))
-    
-    ;; Start in fast mode
-    (dolist (hook magit-removed-hooks-for-fast)
-      (remove-hook 'magit-status-sections-hook hook))
-    
-    ;; Toggle and refresh function
-    (defun magit-toggle-fast-status-and-refresh ()
-      "Toggle between fast and full magit status, then refresh."
-      (interactive)
-      (if (memq 'magit-insert-head-branch-header magit-status-sections-hook)
-          ;; Currently full, switch to fast
-          (progn
-            (dolist (hook magit-removed-hooks-for-fast)
-              (remove-hook 'magit-status-sections-hook hook))
-	    (setq magit-commit-show-diff nil)
-            (message "Magit fast status enabled"))
-        ;; Currently fast, switch to full  
+  :ensure t
+  :after with-editor
+  :config
+  (setq magit-define-global-key-bindings "recommended")
+					;(setq magit-auto-fetch t) does it exist ?
+  
+  ;; Store the hooks that are REMOVED for fast mode
+  (defvar magit-removed-hooks-for-fast
+    '(magit-insert-head-branch-header
+      magit-insert-upstream-branch-header
+      magit-insert-push-branch-header
+      magit-insert-tags-header
+      magit-insert-status-headers
+      magit-insert-unpushed-to-pushremote
+      magit-insert-unpushed-to-upstream-or-recent
+      magit-insert-unpulled-from-pushremote
+      magit-insert-unpulled-from-upstream))
+  
+  ;; Start in fast mode
+  ;; (dolist (hook magit-removed-hooks-for-fast)
+  ;;   (remove-hook 'magit-status-sections-hook hook))
+  
+  ;; Toggle and refresh function
+  (defun magit-toggle-fast-status-and-refresh ()
+    "Toggle between fast and full magit status, then refresh."
+    (interactive)
+    (if (memq 'magit-insert-head-branch-header magit-status-sections-hook)
+        ;; Currently full, switch to fast
         (progn
           (dolist (hook magit-removed-hooks-for-fast)
-            (add-hook 'magit-status-sections-hook hook))
-	  (setq magit-commit-show-diff t)
-          (message "Magit full status enabled")))
-      ;; Always refresh after toggling
-      (magit-refresh))
+            (remove-hook 'magit-status-sections-hook hook))
+	  (setq magit-commit-show-diff nil)
+          (message "Magit fast status enabled"))
+      ;; Currently fast, switch to full  
+      (progn
+        (dolist (hook magit-removed-hooks-for-fast)
+          (add-hook 'magit-status-sections-hook hook))
+	(setq magit-commit-show-diff t)
+        (message "Magit full status enabled")))
+    ;; Always refresh after toggling
+    (magit-refresh))
 
-    ;; Add key binding in magit-status-mode
-    (with-eval-after-load 'magit
-      (define-key magit-status-mode-map (kbd "a") #'magit-toggle-fast-status-and-refresh))
-    
-    :bind
-    (("C-x g" . magit-status)
-     ("C-c g" . magit-dispatch)
-     ("C-c f" . magit-file-dispatch)))
+  ;; Add key binding in magit-status-mode
+  (with-eval-after-load 'magit
+    (define-key magit-status-mode-map (kbd "a") #'magit-toggle-fast-status-and-refresh))
+  
+  :bind
+  (("C-x g" . magit-status)
+   ("C-c g" . magit-dispatch)
+   ("C-c f" . magit-file-dispatch)))
 
 ;;; VC custom with treemacs
 (defun my/treemacs-refresh-current-file ()
@@ -236,6 +239,11 @@
   ;;on windows default emacs restart does not work and this only works for non daemon
   (use-package restart-emacs :ensure t)
   )
+
+;;; Mac os Darwin
+;;; macOS
+(when (eq system-type 'darwin)
+  (setq mac-right-option-modifier nil))
 
 
 ;;; Ripgrep
@@ -1604,10 +1612,13 @@ If PROMPT-USER is non-nil, let user edit the command."
               (add-hook 'flymake-diagnostic-functions #'hl-todo-flymake nil t))))
 
 ;;; Magit delta
+;;; Magit delta (conditional activation)
 (use-package magit-delta
   :ensure t
   :after magit
-  :hook (magit-mode . magit-delta-mode))
+  :init
+  (when (executable-find "delta")
+    (add-hook 'magit-mode-hook 'magit-delta-mode)))
 
 ;;; Magit todo
 
@@ -1692,12 +1703,13 @@ If PROMPT-USER is non-nil, let user edit the command."
   )
 ; Allow having files in workspaces !!! ;-)
 (with-eval-after-load 'treemacs
-  (defadvice treemacs-toggle-node (around open-file-or-toggle activate)
-    (let* ((node (treemacs-node-at-point))
-           (path (treemacs-button-get node :path)))
-      (if (file-regular-p path)
-          (find-file path)
-        ad-do-it))))
+  (advice-add 'treemacs-toggle-node :around
+    (lambda (orig-fun &rest args)
+      (let* ((node (treemacs-node-at-point))
+             (path (treemacs-button-get node :path)))
+        (if (file-regular-p path)
+            (find-file path)
+          (apply orig-fun args))))))
 		
 (use-package treemacs-magit
 :after (treemacs magit)
@@ -1859,5 +1871,3 @@ If PROMPT-USER is non-nil, let user edit the command."
   :ensure t
   :commands (edit-indirect-region))
 
-(use-package with-editor
-  :ensure t)
