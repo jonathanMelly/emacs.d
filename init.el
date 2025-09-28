@@ -243,7 +243,10 @@
 ;;; Mac os Darwin
 ;;; macOS
 (when (eq system-type 'darwin)
-  (setq mac-right-option-modifier nil))
+  (setq mac-right-option-modifier nil)
+  (global-set-key (kbd "<home>") 'move-beginning-of-line)
+  (global-set-key (kbd "<end>") 'move-end-of-line)
+ )
 
 
 ;;; Ripgrep
