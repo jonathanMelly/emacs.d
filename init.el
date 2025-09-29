@@ -529,6 +529,20 @@
   :hook (completion-list-mode . consult-preview-at-point-mode)
 
   )
+;; ability to switch to frames...
+(defun my/consult-frame ()
+  "Select a frame using consult, only showing graphical frames."
+  (interactive)
+  (let* ((frames (seq-filter (lambda (f)
+                               ;; Only graphical frames
+                               (display-graphic-p f))
+                             (frame-list)))
+         (frame-alist (mapcar (lambda (f)
+                                (cons (frame-parameter f 'name) f))
+                              frames))
+         (selected (completing-read "Frame: " frame-alist nil t)))
+    (when selected
+      (select-frame-set-input-focus (cdr (assoc selected frame-alist))))))
 
 (use-package consult-denote
   :ensure t
@@ -950,8 +964,24 @@ Navigate through window configuration history with instant preview."
 ;;;; Avoid issues with M-_ with custom kana altgr...
 (keymap-global-set "C-!" 'undo-redo)
 
+;; Rebind
+(global-unset-key (kbd "C-x f"))
+(global-set-key (kbd "C-x F") 'set-fill-column)
+(global-set-key (kbd "C-x f") 'my/consult-frame) ; choose to switch to other frame
+
 ;; avoid conflics with komorebi (for which win+alt is heavily used !)
 ;(global-set-key (kbd "<M-lwindow>") 'ignore)
+
+;;; Frames
+(defun my/make-frame-with-name (orig-fun &rest args)
+  "Prompt for frame name before creating frame."
+  (let* ((name (read-string "Frame name (empty for auto): "))
+         (frame-params (if (string-empty-p name)
+                          nil
+                        `((name . ,name)))))
+    (apply orig-fun (if frame-params (list frame-params) args))))
+
+(advice-add 'make-frame-command :around #'my/make-frame-with-name)
 
 
 ;;; Custom functions
