@@ -198,6 +198,12 @@
 
 (global-set-key (kbd "C-c c") 'org-capture)
 
+;;; Org table : used for randomize sort
+(defun my/random-sort-key (x)
+  "Return random number for sorting."
+  (random 100000))
+
+
 
 ;;; Org Agenda
 
