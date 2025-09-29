@@ -544,6 +544,7 @@
     (when selected
       (select-frame-set-input-focus (cdr (assoc selected frame-alist))))))
 
+
 (use-package consult-denote
   :ensure t
   :bind
@@ -973,15 +974,28 @@ Navigate through window configuration history with instant preview."
 ;(global-set-key (kbd "<M-lwindow>") 'ignore)
 
 ;;; Frames
-(defun my/make-frame-with-name (orig-fun &rest args)
-  "Prompt for frame name before creating frame."
-  (let* ((name (read-string "Frame name (empty for auto): "))
-         (frame-params (if (string-empty-p name)
-                          nil
-                        `((name . ,name)))))
-    (apply orig-fun (if frame-params (list frame-params) args))))
+;; (defun my/make-frame-with-name (orig-fun &rest args)
+;;   "Prompt for frame name before creating frame."
+;;   (let* ((name (read-string "Frame name (empty for auto): "))
+;;          (frame-params (if (string-empty-p name)
+;;                           nil
+;;                         `((name . ,name)))))
+;;     (apply orig-fun (if frame-params (list frame-params) args))))
+;(advice-add 'make-frame-command :around #'my/make-frame-with-name)
 
-(advice-add 'make-frame-command :around #'my/make-frame-with-name)
+(defun my/make-frame-command ()
+  "Create a new frame, prompting for its name."
+  (interactive)
+  (let* ((name (read-string "Frame name (empty for auto): "))
+         (params (if (string-empty-p name)
+                    nil
+                  `((name . ,name)))))
+    (make-frame params)))
+
+;; Replace the binding
+(global-set-key (kbd "C-x 5 2") 'my/make-frame-command)
+
+
 
 
 ;;; Custom functions
