@@ -339,60 +339,72 @@
 ;;Could be simplified (but losing os style notification) using cross-platform org-notify [https://elpa.gnu.org/packages/org-notify.html]     
 
 (defun my/toast (info)
-  "Display a PowerShell BurntToast notification using toast.ps1 script."
+  "Display a notification using the appropriate method for each platform."
   (let* ((title (plist-get info :title))
-         (message (plist-get info :message))
-         (toast-script-path "c:\\ws\\code\\powershell\\toaster\\toast.ps1")
-         (emacs-exe-path "C:\\ws\\apps\\scoop\\apps\\emacs\\current\\bin\\runemacs.exe"))
+         (message (plist-get info :message)))
     
-    ;; Check if paths exist
-    (if (and (file-exists-p toast-script-path)
-             (file-exists-p emacs-exe-path))
-        ;; Paths exist, proceed with toast notification
-        (let ((ps-command (format 
-                          "powershell -Command \"& '%s' -Title '%s' -Message '%s' -AppID '%s'\""
-                          toast-script-path
-                          (replace-regexp-in-string "'" "''" title)
-                          (replace-regexp-in-string "'" "''" message)
-                          emacs-exe-path)))
-          ;;(message ps-command)
-          (start-process-shell-command "toast-notification" nil ps-command))
-      
-      ;; One or both paths don't exist, show prominent error
-      (let ((missing-paths (cond
-                           ((not (file-exists-p toast-script-path))
-                            (if (not (file-exists-p emacs-exe-path))
-                                "toast.ps1 and runemacs.exe"
-                              "toast.ps1"))
-                           ((not (file-exists-p emacs-exe-path))
-                            "runemacs.exe")
-                           (t ""))))
-        ;; Display error in both message area and popup dialog
-        (let ((error-msg (format "Cannot display toast notification!\nMissing path(s): %s" missing-paths)))
-          (message "%s" error-msg)
-          ;; Create a visible error popup
-          (with-output-to-temp-buffer "*Toast Error*"
-            (princ error-msg))
-          ;; Make sure the buffer is displayed
-          (display-buffer "*Toast Error*")
-          ;; Also show a dialog box
-          (x-popup-dialog
-           t
-           `("Toast Notification Error" 
-             ("OK" . nil)
-             nil
-             "Missing required file(s) for toast notifications:"
-             ,(format "Missing: %s" missing-paths)
-             "Please check the file paths and try again.")))))))
+    (cond
+     ;; macOS - Use native notifications
+     ((eq system-type 'darwin)
+      (if (executable-find "terminal-notifier")
+          ;; Use terminal-notifier if available (better)
+          (start-process-shell-command 
+           "notification" nil
+           (format "terminal-notifier -title '%s' -message '%s' -sender org.gnu.Emacs"
+                   (shell-quote-argument title)
+                   (shell-quote-argument message)))
+        ;; Fallback to osascript (built-in)
+        (start-process-shell-command 
+         "notification" nil
+         (format "osascript -e 'display notification \"%s\" with title \"%s\"'"
+                 (replace-regexp-in-string "\"" "\\\\\"" message)
+                 (replace-regexp-in-string "\"" "\\\\\"" title)))))
+     
+     ;; Windows - Use PowerShell BurntToast (only if files exist)
+     ((eq system-type 'windows-nt)
+      (let ((toast-script-path "c:\\ws\\code\\powershell\\toaster\\toast.ps1")
+            (emacs-exe-path "C:\\ws\\apps\\scoop\\apps\\emacs\\current\\bin\\runemacs.exe"))
+        
+        (if (and (file-exists-p toast-script-path)
+                 (file-exists-p emacs-exe-path))
+            ;; Use BurntToast
+            (let ((ps-command (format 
+                              "powershell -Command \"& '%s' -Title '%s' -Message '%s' -AppID '%s'\""
+                              toast-script-path
+                              (replace-regexp-in-string "'" "''" title)
+                              (replace-regexp-in-string "'" "''" message)
+                              emacs-exe-path)))
+              (start-process-shell-command "toast-notification" nil ps-command))
+          
+          ;; Fallback to simple Windows notification
+          (start-process-shell-command 
+           "notification" nil
+           (format "powershell -Command \"[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('%s', '%s')\""
+                   (replace-regexp-in-string "'" "''" message)
+                   (replace-regexp-in-string "'" "''" title))))))
+     
+     ;; Linux - Use notify-send
+     ((eq system-type 'gnu/linux)
+      (if (executable-find "notify-send")
+          (start-process-shell-command 
+           "notification" nil
+           (format "notify-send '%s' '%s'"
+                   (shell-quote-argument title)
+                   (shell-quote-argument message)))
+        (message "Notification: %s - %s" title message)))
+     
+     ;; Fallback for other systems
+     (t
+      (message "Notification: %s - %s" title message)))))
 
 ;;set alert style (used by org wild notifier)
 (use-package org-alert :ensure t
   :config
-  (alert-define-style 'win-toast
-                  :title "Persistent Windows Toast Notification"
+  (alert-define-style 'xtoast
+                  :title "X platform Toast Notification (windows persistent)"
                   :notifier #'my/toast)
 
-  (setq alert-default-style 'win-toast)
+  (setq alert-default-style 'xtoast)
   
 )
 
