@@ -213,7 +213,14 @@
 (with-eval-after-load 'org
 ;; org todo keyword
   (setq org-todo-keywords
-        '((sequence "TODO" "WIP" "|" "DONE" "DROP"))))
+        '((sequence "TODO(t)" "WIP(i)" "WAIT(w@/!)" "|" "DONE(d)" "DROP(r)")))
+  (setq org-use-fast-todo-selection 'expert)
+  ;;; Org links SSH handling
+  ;; Implies an alias / cmd ssh-connect (for windows that redirects to plink...)
+  (org-link-set-parameters "ssh"
+  :follow (lambda (path)
+            (start-process "ssh-connect" nil "ssh-connect" path)))
+)
 
 (setq org-refile-targets '(
 			   (nil :maxlevel . 9);; nil means any header in the current file
@@ -226,7 +233,7 @@
 (setq org-agenda-files "~/org/agenda-files.txt")
 
 ;;default ((agenda habit-down time-up urgency-down category-keep) (todo urgency-down category-keep) (tags urgency-down category-keep) (search category-keep))
-(setq org-agenda-sorting-strategy '(deadline-up scheduled-up priority-down))
+(setq org-agenda-sorting-strategy '(deadline-up scheduled-up priority-down todo-state-down))
 
 ;; for column view mode, default ?
 (setq org-columns-default-format "%50ITEM %TODO %SCHEDULED %DEADLINE %TAGS")
@@ -236,7 +243,6 @@
 
 ;;; Org indent
 (setq org-startup-indented t)
-
 
 
 ;;; Windows
