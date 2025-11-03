@@ -1169,7 +1169,7 @@ Navigate through window configuration history with instant preview."
 (when (and (fboundp 'treesit-available-p) (treesit-available-p))
   ;; Set up language sources for built-in modes
   (setq treesit-language-source-alist
-        '((rust "https://github.com/tree-sitter/tree-sitter-rust")
+        '((rust "https://github.com/tree-sitter/tree-sitter-rust" "v0.23.3")
           (python "https://github.com/tree-sitter/tree-sitter-python")
           (go "https://github.com/tree-sitter/tree-sitter-go")
           (javascript "https://github.com/tree-sitter/tree-sitter-javascript")
@@ -1278,31 +1278,97 @@ Navigate through window configuration history with instant preview."
   '("." "~/Documents" "~/Notes")
   "Chemins de recherche pour les fichiers markdown.")
 
-(defun markdown-smart-links--collect-md-files ()
-  "Collecte tous les fichiers .md disponibles."
+;; Variable de configuration
+(defcustom markdown-smart-links-file-extensions "\\.\\(mdx?\\|cs\\|pptx?\\|txt\\|exe\\|zip\\|pdf\\|docx?\\)$"
+  "Regex des extensions de fichiers à inclure dans les liens.
+Par défaut: .md, .mdx, .cs, .ppt, .pptx"
+  :type 'string
+  :group 'markdown)
+
+(defun markdown-smart-links--collect-files ()
+  "Collecte tous les fichiers selon markdown-smart-links-file-extensions."
   (let ((files '()))
     ;; Projet actuel
     (when (and (fboundp 'project-current) (project-current))
       (setq files (append files 
                           (directory-files-recursively 
-                           (project-root (project-current)) "\\.md$"))))
+                           (project-root (project-current)) 
+                           markdown-smart-links-file-extensions))))
     ;; Buffers ouverts
     (dolist (buffer (buffer-list))
       (when (and (buffer-file-name buffer)
-                 (string-match-p "\\.md$" (buffer-file-name buffer)))
+                 (string-match-p markdown-smart-links-file-extensions 
+                                (buffer-file-name buffer)))
         (push (buffer-file-name buffer) files)))
     ;; Chemins configurés
     (dolist (path markdown-smart-links-search-paths)
       (when (file-directory-p (expand-file-name path))
         (setq files (append files 
                             (directory-files-recursively 
-                             (expand-file-name path) "\\.md$")))))
+                             (expand-file-name path) 
+                             markdown-smart-links-file-extensions)))))
     ;; Historique récent
     (when (bound-and-true-p recentf-list)
       (dolist (file recentf-list)
-        (when (string-match-p "\\.md$" file)
+        (when (string-match-p markdown-smart-links-file-extensions file)
           (push file files))))
     (delete-dups files)))
+
+(defun markdown-smart-insert-link ()
+  "Version intelligente de markdown-insert-link avec autocomplétion."
+  (interactive)
+  (let* ((link-data (markdown-smart-links--get-link-at-point))
+         (existing-text (plist-get link-data :text))
+         (existing-url (plist-get link-data :url))
+         (link-start (plist-get link-data :start))
+         (link-end (plist-get link-data :end))
+         (files (markdown-smart-links--collect-files))
+         (candidates (mapcar (lambda (f) 
+                              (cons (markdown-smart-links--format-candidate f) f))
+                            files))
+         (choice (completing-read "Lien vers: " candidates nil nil existing-url))
+         (selected (cdr (assoc choice candidates)))
+         (is-file (when (and (not selected) (not (string-empty-p choice)))
+                   (let ((abs-path (if (file-name-absolute-p choice)
+                                      choice
+                                    (expand-file-name choice (file-name-directory (buffer-file-name))))))
+                     (and (file-exists-p abs-path) 
+                          (string-match-p markdown-smart-links-file-extensions abs-path)
+                          abs-path)))))
+    
+    (when (or selected is-file (not (string-empty-p choice)))
+      
+      (if (or selected is-file)
+          (let* ((target-file (or selected is-file))
+                 (is-markdown (string-match-p "\\.mdx?$" target-file))
+                 (heading (when is-markdown 
+                           (markdown-smart-links--choose-heading target-file)))
+                 (current-file (buffer-file-name))
+                 (link-target (if current-file
+                                 (file-relative-name target-file (file-name-directory current-file))
+                               target-file))
+                 (anchor (if (and heading (not (string-empty-p heading)))
+                            (concat "#" (replace-regexp-in-string 
+                                        "[^a-zA-Z0-9-]" "-" (downcase heading)))
+                          ""))
+                 (default-text (or existing-text
+                                  (if (string-empty-p anchor)
+                                      (file-name-base target-file) 
+                                    heading)))
+                 (text (read-string "Texte du lien (optionnel): " default-text))
+                 (final-text (if (string-empty-p text)
+                                default-text
+                              text)))
+            (when (and link-start link-end)
+              (delete-region link-start link-end))
+            (insert (format "[%s](%s%s)" final-text link-target anchor)))
+        
+        (let* ((text (read-string "Texte du lien (optionnel): " 
+                                 (or existing-text choice)))
+               (final-text (if (string-empty-p text) choice text)))
+          (when (and link-start link-end)
+            (delete-region link-start link-end))
+          (insert (format "[%s](%s)" final-text choice)))))))
 
 (defun markdown-smart-links--extract-headings (file)
   "Extrait les headings d'un fichier markdown."
@@ -1360,69 +1426,6 @@ Retourne une plist avec :text, :url, :start, :end ou nil si pas de lien."
                                 :end link-end)))))
         result))))
 
-(defun markdown-smart-insert-link ()
-  "Version intelligente de markdown-insert-link avec autocomplétion."
-  (interactive)
-  (let* ((link-data (markdown-smart-links--get-link-at-point))
-         (existing-text (plist-get link-data :text))
-         (existing-url (plist-get link-data :url))
-         (link-start (plist-get link-data :start))
-         (link-end (plist-get link-data :end))
-         (files (markdown-smart-links--collect-md-files))
-         (candidates (mapcar (lambda (f) 
-                              (cons (markdown-smart-links--format-candidate f) f))
-                            files))
-         ;; Pré-remplir le champ avec l'URL existante pour permettre la modification
-         (choice (completing-read "Lien vers: " candidates nil nil existing-url))
-         (selected (cdr (assoc choice candidates)))
-         ;; Si pas trouvé dans les candidats, vérifier si c'est un fichier existant
-         (is-file (when (and (not selected) (not (string-empty-p choice)))
-                   (let ((abs-path (if (file-name-absolute-p choice)
-                                      choice
-                                    (expand-file-name choice (file-name-directory (buffer-file-name))))))
-                     (and (file-exists-p abs-path) 
-                          (string-match-p "\\.mdx?$" abs-path)
-                          abs-path)))))
-    
-    ;; Procéder seulement si on a une sélection valide
-    (when (or selected is-file (not (string-empty-p choice)))
-      
-      (if (or selected is-file)
-          ;; Fichier sélectionné - demander heading et texte
-          (let* ((target-file (or selected is-file))
-                 (heading (markdown-smart-links--choose-heading target-file))
-                 (current-file (buffer-file-name))
-                 (link-target (if current-file
-                                 (file-relative-name target-file (file-name-directory current-file))
-                               target-file))
-                 (anchor (if (and heading (not (string-empty-p heading)))
-                            (concat "#" (replace-regexp-in-string 
-                                        "[^a-zA-Z0-9-]" "-" (downcase heading)))
-                          ""))
-                 ;; Pré-remplir le texte avec l'existant ou une valeur par défaut
-                 (default-text (or existing-text
-                                  (if (string-empty-p anchor)
-                                      (file-name-base target-file) 
-                                    heading)))
-                 (text (read-string "Texte du lien (optionnel): " default-text))
-                 (final-text (if (string-empty-p text)
-                                default-text
-                              text)))
-            ;; Tout s'est bien passé, on peut maintenant supprimer l'ancien lien et insérer le nouveau
-            (when (and link-start link-end)
-              (delete-region link-start link-end))
-            (insert (format "[%s](%s%s)" final-text link-target anchor)))
-        
-        ;; Saisie libre - insérer manuellement
-        (let* ((text (read-string "Texte du lien (optionnel): " 
-                                 (or existing-text choice)))
-               (final-text (if (string-empty-p text) choice text)))
-          ;; Tout s'est bien passé, on peut maintenant supprimer l'ancien lien et insérer le nouveau
-          (when (and link-start link-end)
-            (delete-region link-start link-end))
-          (insert (format "[%s](%s)" final-text choice)))))))
-
-
 (defun markdown-smart-links-setup ()
   "Configure l'autocomplétion pour markdown-mode."
   ;; Remplacer le raccourci natif par notre version intelligente
@@ -1443,6 +1446,9 @@ Retourne une plist avec :text, :url, :start, :end ou nil si pas de lien."
   "Save clipboard image to images folder and insert markdown link.
 Uses org-download configuration but works in markdown-mode."
   (interactive)
+  (unless (buffer-file-name)
+    (error "Buffer must be visiting a file. Save the buffer first."))
+  
   (let* ((image-dir (if (boundp 'org-download-image-dir)
                         (expand-file-name org-download-image-dir 
                                           (file-name-directory (buffer-file-name)))
@@ -1633,6 +1639,11 @@ If PROMPT-USER is non-nil, let user edit the command."
   (define-key project-prefix-map "T" #'project-test)          ; C-x p t (to be checked)
 					;(define-key project-prefix-map "R" #'project-run-with-command) ; C-x p R
   )
+
+;;; Rust mode TODO
+;; (use-package rust-mode :ensure t
+;;   :hook (rust-mode . (lambda () (eglot-ensure) (flymake-mode 1)))
+;; )
 
 ;; overridable with .dir-locals.el					;
 ;;; For a PHP Laravel project (.dir-locals.el)
@@ -1968,6 +1979,55 @@ If PROMPT-USER is non-nil, let user edit the command."
 :after (treemacs magit)
 :ensure t)
 
+(defun my/open-with-totalcmd (path)
+  "Open PATH with Total Commander using tc.bat.
+PATH can be a file or directory."
+  (interactive "Open with Total Commander: ")
+  (let ((full-path (expand-file-name path)))
+    (if (file-directory-p full-path)
+        (start-process "totalcmd" nil "tc" full-path)
+      (start-process "totalcmd" nil "tc" (file-name-directory full-path)))))
+
+
+;; Ajouter au keymap de treemacs
+(with-eval-after-load 'treemacs
+
+  (defun treemacs-open-with-totalcmd ()
+    "Open current treemacs node with Total Commander."
+    (interactive)
+    (-when-let (path (treemacs--prop-at-point :path))
+      (my/open-with-totalcmd path)))
+  
+  ;; Binding direct : o t
+  (define-key treemacs-mode-map (kbd "o t") 'treemacs-open-with-totalcmd)
+
+  ;; Ajouter au menu contextuel
+  (defun treemacs-rightclick-menu--add-totalcmd (orig-fun event)
+    "Advice pour ajouter Total Commander au menu contextuel."
+    (cl-letf* ((orig-easy-menu-create-menu (symbol-function 'easy-menu-create-menu))
+               ((symbol-function 'easy-menu-create-menu)
+                (lambda (menu-name menu-items &rest args)
+                  ;; Ajouter notre option dans le menu "Open With"
+                  (let ((modified-items
+                         (mapcar
+                          (lambda (item)
+                            (if (and (listp item) 
+                                     (stringp (car item))
+                                     (string= (car item) "Open With"))
+                                ;; Ajouter Total Commander au sous-menu "Open With"
+                                (append item 
+                                        '(["Open with Total Commander" treemacs-open-with-totalcmd
+                                           :help "Open with Total Commander"]))
+                              item))
+                          menu-items)))
+                    (apply orig-easy-menu-create-menu menu-name modified-items args)))))
+      (funcall orig-fun event)))
+  
+  (advice-add 'treemacs-rightclick-menu :around #'treemacs-rightclick-menu--add-totalcmd)
+
+)
+
+
 ;; Enable outline-minor-mode where needed
 (add-hook 'text-mode-hook 'outline-minor-mode)
 (add-hook 'prog-mode-hook 'outline-minor-mode)
@@ -2124,3 +2184,32 @@ If PROMPT-USER is non-nil, let user edit the command."
   :ensure t
   :commands (edit-indirect-region))
 
+
+(defun my/emacs-frame (file-or-command &optional frame-name)
+  "Open FILE-OR-COMMAND in a frame named FRAME-NAME, reuse if exists.
+If FILE-OR-COMMAND starts with '(', evaluate it as an Emacs command.
+Otherwise, open it as a file.
+If FRAME-NAME is nil, use Emacs default frame title."
+  (let* ((frame (when frame-name
+                  (seq-find 
+                   (lambda (f) (string= (frame-parameter f 'name) frame-name))
+                   (frame-list)))))
+    (if frame
+        (select-frame-set-input-focus frame)
+      (select-frame-set-input-focus 
+       (make-frame (when frame-name `((name . ,frame-name))))))
+    (if (string-prefix-p "(" file-or-command)
+        (eval (read file-or-command))
+      (find-file file-or-command))))
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(safe-local-variable-values '((org-imenu-depth . 4))))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
