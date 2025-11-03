@@ -648,6 +648,21 @@
   :hook
   (embark-collect-mode . consult-preview-at-point-mode))
 
+(with-eval-after-load 'embark
+  (defun my/embark-open-org-link-with-tc (link)
+  "Open org LINK with Total Commander."
+  (let ((path (if (string-prefix-p "file:" link)
+                  (substring link 5)  ; enlève "file:"
+                link)))
+    (my/open-with-totalcmd path)))
+  
+  ;; Ajouter l'action pour les fichiers normaux
+  (define-key embark-file-map (kbd "T") #'my/open-with-totalcmd)
+  
+  ;; Ajouter l'action pour les org-links
+  (with-eval-after-load 'org
+    (define-key embark-org-link-map (kbd "T") #'my/embark-open-org-link-with-tc)))
+
 
 ;;; Imenu
 ;;Customize imenu for easy navigation in this file
