@@ -57,7 +57,6 @@
   :after with-editor
   :config
   (setq magit-define-global-key-bindings "recommended")
-					;(setq magit-auto-fetch t) does it exist ?
   
   ;; Store the hooks that are REMOVED for fast mode
   (defvar magit-removed-hooks-for-fast
@@ -71,9 +70,10 @@
       magit-insert-unpulled-from-pushremote
       magit-insert-unpulled-from-upstream))
   
-  ;; Start in fast mode
-  ;; (dolist (hook magit-removed-hooks-for-fast)
-  ;;   (remove-hook 'magit-status-sections-hook hook))
+  ;; Start in fast mode - DÉCOMMENTÉ
+  (dolist (hook magit-removed-hooks-for-fast)
+    (remove-hook 'magit-status-sections-hook hook))
+  (setq magit-commit-show-diff nil)  ;; Ajouter cette ligne aussi
   
   ;; Toggle and refresh function
   (defun magit-toggle-fast-status-and-refresh ()
@@ -84,17 +84,17 @@
         (progn
           (dolist (hook magit-removed-hooks-for-fast)
             (remove-hook 'magit-status-sections-hook hook))
-	  (setq magit-commit-show-diff nil)
+          (setq magit-commit-show-diff nil)
           (message "Magit fast status enabled"))
       ;; Currently fast, switch to full  
       (progn
         (dolist (hook magit-removed-hooks-for-fast)
           (add-hook 'magit-status-sections-hook hook))
-	(setq magit-commit-show-diff t)
+        (setq magit-commit-show-diff t)
         (message "Magit full status enabled")))
     ;; Always refresh after toggling
     (magit-refresh))
-
+  
   ;; Add key binding in magit-status-mode
   (with-eval-after-load 'magit
     (define-key magit-status-mode-map (kbd "a") #'magit-toggle-fast-status-and-refresh))
