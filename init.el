@@ -52,44 +52,51 @@
 (use-package transient :ensure (:wait t))
 ;;; with-editor (required by magit)
 (use-package with-editor :ensure t)
+
 (use-package magit 
   :ensure t
   :after with-editor
   :config
   (setq magit-define-global-key-bindings "recommended")
   
-  ;; Store the hooks that are REMOVED for fast mode
+  ;; Get the default full hook list from magit's standard-value
+  (defvar magit-full-status-sections-hook
+    (eval (car (get 'magit-status-sections-hook 'standard-value)))
+    "Full magit status sections hook (magit's default).")
+  
+  ;; Hooks to remove for fast mode
   (defvar magit-removed-hooks-for-fast
-    '(magit-insert-head-branch-header
-      magit-insert-upstream-branch-header
-      magit-insert-push-branch-header
-      magit-insert-tags-header
-      magit-insert-status-headers
+    '(magit-insert-status-headers
       magit-insert-unpushed-to-pushremote
       magit-insert-unpushed-to-upstream-or-recent
       magit-insert-unpulled-from-pushremote
-      magit-insert-unpulled-from-upstream))
+      magit-insert-unpulled-from-upstream)
+    "Hooks removed in fast mode.")
   
-  ;; Start in fast mode - DÉCOMMENTÉ
-  (dolist (hook magit-removed-hooks-for-fast)
-    (remove-hook 'magit-status-sections-hook hook))
-  (setq magit-commit-show-diff nil)  ;; Ajouter cette ligne aussi
+  ;; Create fast mode hook list by filtering
+  (defvar magit-fast-status-sections-hook
+    (seq-filter (lambda (hook)
+                  (not (memq hook magit-removed-hooks-for-fast)))
+                magit-full-status-sections-hook)
+    "Fast magit status sections hook (without headers and push/pull info).")
+  
+  ;; Start in fast mode
+  (setq magit-status-sections-hook magit-fast-status-sections-hook)
+  (setq magit-commit-show-diff nil)
   
   ;; Toggle and refresh function
   (defun magit-toggle-fast-status-and-refresh ()
     "Toggle between fast and full magit status, then refresh."
     (interactive)
-    (if (memq 'magit-insert-head-branch-header magit-status-sections-hook)
+    (if (memq 'magit-insert-status-headers magit-status-sections-hook)
         ;; Currently full, switch to fast
         (progn
-          (dolist (hook magit-removed-hooks-for-fast)
-            (remove-hook 'magit-status-sections-hook hook))
+          (setq magit-status-sections-hook magit-fast-status-sections-hook)
           (setq magit-commit-show-diff nil)
           (message "Magit fast status enabled"))
-      ;; Currently fast, switch to full  
+      ;; Currently fast, switch to full
       (progn
-        (dolist (hook magit-removed-hooks-for-fast)
-          (add-hook 'magit-status-sections-hook hook))
+        (setq magit-status-sections-hook magit-full-status-sections-hook)
         (setq magit-commit-show-diff t)
         (message "Magit full status enabled")))
     ;; Always refresh after toggling
@@ -103,6 +110,7 @@
   (("C-x g" . magit-status)
    ("C-c g" . magit-dispatch)
    ("C-c f" . magit-file-dispatch)))
+
 
 ;;; VC custom with treemacs
 (defun my/treemacs-refresh-current-file ()
@@ -258,7 +266,10 @@
   (setq mac-right-option-modifier nil)
   (global-set-key (kbd "<home>") 'move-beginning-of-line)
   (global-set-key (kbd "<end>") 'move-end-of-line)
- )
+  )
+
+;;; Revert mode
+(global-auto-revert-mode 1)
 
 
 ;;; Ripgrep
@@ -305,6 +316,7 @@
    )
   :config
   (setq denote-directory (expand-file-name "~/org/kb"))
+  (setq consult-denote-find-command 'consult-fd) ;consult-find does not seem to work well. maybe issue with windows where find is windows find... thus it should use gfind...
 
   ;; Automatically rename Denote buffers when opening them so that
   ;; instead of their long file name they have, for example, a literal
@@ -1270,7 +1282,9 @@ Navigate through window configuration history with instant preview."
         (insert "# "))))
   )
 
-(use-package denote-markdown :ensure t)
+;use for obsidian links...
+;in fact i dont realy use markdown for notes...and it modifies default behaviour of creating md instead of org...
+;(use-package denote-markdown :ensure t)
 
 ;;; markdown-smart-links.el --- Autocompletion intelligente de liens markdown
 
@@ -1780,7 +1794,25 @@ If PROMPT-USER is non-nil, let user edit the command."
 ;         (php-mode . eglot-ensure)
 ;         (csharp-mode . eglot-ensure)))
 
-;performance tips https://emacs-lsp.github.io/lsp-mode/page/performance/
+					;performance tips https://emacs-lsp.github.io/lsp-mode/page/performance/
+
+;;; performance : tentative d’éviter error process sentinel...
+;; Configuration Windows pour Emacs 30.1
+(when (eq system-type 'windows-nt)
+  ;; Augmenter les buffers de pipes
+  (setq w32-pipe-buffer-size (* 64 1024))
+  (setq w32-pipe-read-delay 0)
+  
+  ;; Limites d'évaluation plus hautes
+  (setq max-specpdl-size 10000)
+  (setq max-lisp-eval-depth 10000)
+  
+  ;; Meilleure gestion des processus pour eglot
+  (setq eglot-sync-connect nil)
+  (setq eglot-connect-timeout 60))
+
+;; Tuer proprement les serveurs LSP à la fermeture
+;(add-hook 'kill-emacs-hook #'eglot-shutdown-all)
 
 ;;realy needed ?
 ;(setenv "LSP_USE_PLISTS" "true") ONLY for LSP-MODE
