@@ -2359,31 +2359,52 @@ PATH can be a file or directory."
   :commands (edit-indirect-region))
 
 
-(defun my/emacs-frame (file-or-command &optional frame-name)
+(defun my/emacs-frame (file-or-command &optional frame-name create-new-frame)
   "Open FILE-OR-COMMAND in a frame named FRAME-NAME, reuse if exists.
+Focus is forced aggressively for Windows compatibility.
 If FILE-OR-COMMAND starts with '(', evaluate it as an Emacs command.
-Otherwise, open it as a file.
-If FRAME-NAME is nil, use Emacs default frame title."
+Otherwise, open it as a file."
   (let* ((frame (when frame-name
                   (seq-find 
                    (lambda (f) (string= (frame-parameter f 'name) frame-name))
                    (frame-list)))))
-    (if frame
-        (select-frame-set-input-focus frame)
-      (select-frame-set-input-focus 
-       (make-frame (when frame-name `((name . ,frame-name))))))
+    
+    ;; Determine the target frame (reuse existing or create new)
+    (setq frame 
+          (if (and frame (not create-new-frame))
+              frame
+            (make-frame (when frame-name `((name . ,frame-name))))))
+
+    ;; --- CRITICAL FOCUS BLOCK (Applied to BOTH cases) ---
+    ;; 1. Raise the window to the top of the Z-order
+    (raise-frame frame)
+    
+    ;; 2. Force Windows-specific focus (bypasses standard activation restrictions)
+    (if (fboundp 'w32-focus-frame)
+        (w32-focus-frame frame)
+      (select-frame-set-input-focus frame))
+    
+    ;; 3. Ensure Emacs internal state matches
+    (select-frame frame)
+    ;; ---------------------------------------------------
+
+    ;; Execute the payload
     (if (string-prefix-p "(" file-or-command)
         (eval (read file-or-command))
       (find-file file-or-command))))
+
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(safe-local-variable-values '((org-imenu-depth . 4))))
+ '(ignored-local-variable-values '((org-imenu-depth . 5)))
+ '(safe-local-variable-values '((org-imenu-depth . 10) (org-imenu-depth . 4))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  )
+(put 'upcase-region 'disabled nil)
+(put 'downcase-region 'disabled nil)
