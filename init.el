@@ -581,7 +581,7 @@
   ; Not realy checked if realy better
   ;but often rg crashes / blocks emacs
   (setq consult-ripgrep-args
-	"rg --null --line-buffered --color=never --max-columns=1000 --path-separator / --smart-case --no-heading --line-number -M 500"); it 
+	"rg -. --null --line-buffered --color=never --max-columns=1000 --path-separator / --smart-case --no-heading --line-number -M 500"); it 
   
   ;; Enable automatic preview at point in the *Completions* buffer. This is
   ;; relevant when you use the default completion UI.
