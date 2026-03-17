@@ -1423,6 +1423,14 @@ Dans les deux cas : ajoute toujours les buffers ouverts et l'historique récent.
     
     (when (or selected is-file (not (string-empty-p choice)))
       
+      ;; Delete the region if active
+      (when region-active
+        (delete-region (region-beginning) (region-end)))
+      
+      ;; Delete existing link if present
+      (when (and link-start link-end (not region-active))
+        (delete-region link-start link-end))
+      
       (if (or selected is-file)
           (let* ((target-file (or selected is-file))
                  (is-markdown (string-match-p "\\.mdx?$" target-file))
@@ -1436,7 +1444,8 @@ Dans les deux cas : ajoute toujours les buffers ouverts et l'historique récent.
                             (concat "#" (replace-regexp-in-string 
                                         "[^a-zA-Z0-9-]" "-" (downcase heading)))
                           ""))
-                 (default-text (or existing-text
+                 (default-text (or region-text    ; Use region text first
+                                  existing-text
                                   (if (string-empty-p anchor)
                                       (file-name-base target-file) 
                                     heading)))
@@ -1444,15 +1453,11 @@ Dans les deux cas : ajoute toujours les buffers ouverts et l'historique récent.
                  (final-text (if (string-empty-p text)
                                 default-text
                               text)))
-            (when (and link-start link-end)
-              (delete-region link-start link-end))
             (insert (format "[%s](%s%s)" final-text link-target anchor)))
         
-        (let* ((text (read-string "Texte du lien (optionnel): " 
-                                 (or existing-text choice)))
-               (final-text (if (string-empty-p text) choice text)))
-          (when (and link-start link-end)
-            (delete-region link-start link-end))
+        (let* ((default-text (or region-text existing-text choice))
+               (text (read-string "Texte du lien (optionnel): " default-text))
+               (final-text (if (string-empty-p text) default-text text)))
           (insert (format "[%s](%s)" final-text choice)))))))
 
 (defun markdown-smart-links--extract-headings (file)
