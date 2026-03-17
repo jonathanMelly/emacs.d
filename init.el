@@ -2094,6 +2094,30 @@ If PROMPT-USER is non-nil, let user edit the command."
 :after (treemacs magit)
 :ensure t)
 
+; Default mode to current project (like vscode...)
+;; Option 1: Always force Treemacs to show ONLY the current project
+;; This bypasses the workspace concept entirely for single-project focus.
+;(setq treemacs-perspective-projects nil) ;; Disable perspective integration if enabled
+
+(defun my/treemacs-show-current-project ()
+  "Automatically display only the current project when Treemacs opens."
+  (when (project-current)
+    (treemacs-display-current-project-exclusively)))
+
+(add-hook 'treemacs-post-buffer-init-hook #'my/treemacs-show-current-project)
+
+
+(defun guit ()
+  "Start preferred git gui in project"
+  (interactive)
+  (let ((project-root (or (when-let ((project (project-current)))
+                            (project-root project))
+                          default-directory)))
+    (start-process "sublime-merge" 
+                   nil 
+                   "vcs.cmd"
+                   project-root)))
+
 (defun my/open-with-totalcmd (path)
   "Open PATH with Total Commander using tc.bat.
 PATH can be a file or directory."
