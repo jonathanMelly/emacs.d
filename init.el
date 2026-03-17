@@ -768,6 +768,17 @@
               desktop-globals-to-save))
 ;;(desktop-save-mode 1);;do it manually : desktop-save / desktop-read
 
+;;; Autosave when switching window, like testing navigator...
+(when (>= emacs-major-version 27)
+  (setq after-focus-change-function 
+        (lambda ()
+          (when (and (buffer-file-name)  ; a un fichier associé
+                     (not (string-match "^[ *]" (buffer-name)))  ; nom normal
+                     (not buffer-read-only))  ; modifiable
+            (save-buffer)))))
+;; to undo this, run
+;;(setq after-focus-change-function 'ignore)
+
 
 ;;; History
 ;; Persist history over Emacs restarts. Vertico sorts by history position.
