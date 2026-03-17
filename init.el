@@ -987,7 +987,9 @@ Navigate through window configuration history with instant preview."
 (setq show-trailing-whitespace t) ;;
 (setq delete-by-moving-to-trash t) ;; use trash-cli rather than rm when deleting files.
 (electric-pair-mode 1)
-(electric-quote-mode 1)
+;; Exclure les backticks partout
+(setq electric-quote-chars '(?\" ?\" ?\' ?\' ?\' ?\')) ; backticks electric have issues with some modes, try to keep it simple
+(electric-quote-mode 1) 
 
 
 ;;; Key bindings
