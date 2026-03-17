@@ -2166,6 +2166,41 @@ PATH can be a file or directory."
 
 )
 
+;; enable divider mode (vertical adjust width with mouse)
+(window-divider-mode 1)
+
+;; auto copy selected stuff (sends to kill ring)
+;; (cond
+;;  ;; Windows : copie manuelle dans le clipboard
+;;  ;; un peu agressif.. donc seul. avec la souris
+;;  ((eq system-type 'windows-nt)
+;;   (defvar my-last-region-size 0
+;;     "Taille de la dernière région copiée.")
+  
+;;   (defun my-auto-copy-selection ()
+;;     "Copie la région quand elle est stable."
+;;     (if (region-active-p)
+;;         (let ((size (- (region-end) (region-beginning))))
+;;           (when (and (> size 0)
+;;                      (not (eq size my-last-region-size))
+;;                      (not (memq this-command '(kill-region kill-ring-save))))
+;;             (run-with-idle-timer 1.2 nil
+;;               (lambda ()
+;;                 (when (region-active-p)
+;;                   (kill-ring-save (region-beginning) (region-end) t)
+;;                   (setq my-last-region-size (- (region-end) (region-beginning))))))))
+;;       (setq my-last-region-size 0)))
+  
+;;   (add-hook 'post-command-hook 'my-auto-copy-selection)
+;;   )
+ 
+;;  ;; Linux/Unix/macOS : utilise select-active-regions pour primary selection
+;;  (t
+;;   (setq select-active-regions t)
+;;   )
+;;  )
+
+(setq mouse-drag-copy-region t)
 
 ;; Enable outline-minor-mode where needed
 (add-hook 'text-mode-hook 'outline-minor-mode)
