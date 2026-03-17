@@ -1336,45 +1336,73 @@ Navigate through window configuration history with instant preview."
   "Chemins de recherche pour les fichiers markdown.")
 
 ;; Variable de configuration
-(defcustom markdown-smart-links-file-extensions "\\.\\(mdx?\\|cs\\|pptx?\\|txt\\|exe\\|zip\\|pdf\\|docx?\\)$"
+(defcustom markdown-smart-links-file-extensions "\\.\\(mdx?\\|cs\\|pptx?\\|txt\\|exe\\|zip\\|pdf\\|docx?\\|mkv\\|mp4\\)$"
   "Regex des extensions de fichiers à inclure dans les liens.
 Par défaut: .md, .mdx, .cs, .ppt, .pptx"
   :type 'string
   :group 'markdown)
 
 (defun markdown-smart-links--collect-files ()
-  "Collecte tous les fichiers selon markdown-smart-links-file-extensions."
-  (let ((files '()))
-    ;; Projet actuel
-    (when (and (fboundp 'project-current) (project-current))
-      (setq files (append files 
-                          (directory-files-recursively 
-                           (project-root (project-current)) 
-                           markdown-smart-links-file-extensions))))
-    ;; Buffers ouverts
-    (dolist (buffer (buffer-list))
-      (when (and (buffer-file-name buffer)
-                 (string-match-p markdown-smart-links-file-extensions 
-                                (buffer-file-name buffer)))
-        (push (buffer-file-name buffer) files)))
-    ;; Chemins configurés
-    (dolist (path markdown-smart-links-search-paths)
-      (when (file-directory-p (expand-file-name path))
-        (setq files (append files 
-                            (directory-files-recursively 
-                             (expand-file-name path) 
-                             markdown-smart-links-file-extensions)))))
-    ;; Historique récent
-    (when (bound-and-true-p recentf-list)
-      (dolist (file recentf-list)
-        (when (string-match-p markdown-smart-links-file-extensions file)
-          (push file files))))
+  "Collecte les fichiers markdown.
+STRATEGIE:
+1. Si un projet Git est détecté : utilise UNIQUEMENT `project-files` (rapide, respecte .gitignore).
+   -> Ignore complètement `markdown-smart-links-search-paths`.
+2. Sinon (pas de projet) : utilise UNIQUEMENT `markdown-smart-links-search-paths` avec recursion manuelle.
+Dans les deux cas : ajoute toujours les buffers ouverts et l'historique récent."
+  (let ((files '())
+        (ext-regexp markdown-smart-links-file-extensions))
+
+    ;; Helper: Manual recursion (used ONLY if no project is found)
+    (cl-labels ((safe-rec-files (dir)
+                  (let ((result '()))
+                    (dolist (entry (directory-files dir t "^\\.[^.]"))
+                      (if (file-directory-p entry)
+                          (unless (string-match-p "/\\(node_modules\\|vendor\\)/" entry)
+                            (setq result (append result (safe-rec-files entry))))
+                        (when (string-match-p ext-regexp entry)
+                          (push entry result))))
+                    result)))
+
+      (if (and (fboundp 'project-current) (project-current))
+          ;; === BRANCHE IF : PROJET DÉTECTÉ ===
+          (let* ((proj (project-current))
+                 (root (project-root proj))
+                 (proj-files (project-files proj)))
+            ;; On prend TOUS les fichiers du projet, on filtre juste l'extension
+            (setq files 
+                  (delq nil 
+                        (mapcar (lambda (f) 
+                                  (when (string-match-p ext-regexp f) 
+                                    (concat root f))) 
+                                proj-files))))
+        
+        ;; === BRANCHE ELSE : PAS DE PROJET ===
+        (dolist (path markdown-smart-links-search-paths)
+          (when (file-directory-p (expand-file-name path))
+            (setq files (append files (safe-rec-files (expand-file-name path)))))))
+
+      ;; === COMMUN AUX DEUX CAS ===
+      ;; 3. Buffers ouverts
+      (dolist (buffer (buffer-list))
+        (when (and (buffer-file-name buffer)
+                   (string-match-p ext-regexp (buffer-file-name buffer)))
+          (push (buffer-file-name buffer) files)))
+
+      ;; 4. Historique récent
+      (when (bound-and-true-p recentf-list)
+        (dolist (file recentf-list)
+          (when (string-match-p ext-regexp file)
+            (push file files)))))
+
     (delete-dups files)))
 
 (defun markdown-smart-insert-link ()
   "Version intelligente de markdown-insert-link avec autocomplétion."
   (interactive)
-  (let* ((link-data (markdown-smart-links--get-link-at-point))
+  (let* ((region-active (use-region-p))
+         (region-text (when region-active
+                       (buffer-substring-no-properties (region-beginning) (region-end))))
+         (link-data (markdown-smart-links--get-link-at-point))
          (existing-text (plist-get link-data :text))
          (existing-url (plist-get link-data :url))
          (link-start (plist-get link-data :start))
