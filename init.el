@@ -1810,6 +1810,13 @@ If PROMPT-USER is non-nil, let user edit the command."
   :ensure t
   :hook (powershell-mode . (lambda () (eglot-ensure) (flymake-mode 1))))
 
+;;; Golang
+(use-package go-mode
+  :ensure t
+  :hook (go-mode . (lambda () (eglot-ensure) (flymake-mode 1))))
+;(use-package go-flymake
+;  :ensure)
+
 
 
 ;;; EGLOT LSP language server
