@@ -227,6 +227,8 @@
   "Return random number for sorting."
   (random 100000))
 
+;;enable highlight table line auto (disabled as everywhere...)
+;;(global-hl-line-mode 1)
 
 
 ;;; Org Agenda
