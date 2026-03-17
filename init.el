@@ -1226,7 +1226,7 @@ Navigate through window configuration history with instant preview."
   (setq treesit-language-source-alist
         '((rust "https://github.com/tree-sitter/tree-sitter-rust" "v0.23.3")
           (python "https://github.com/tree-sitter/tree-sitter-python")
-          (go "https://github.com/tree-sitter/tree-sitter-go")
+          (go "https://github.com/tree-sitter/tree-sitter-go" "v0.23.3")
           (javascript "https://github.com/tree-sitter/tree-sitter-javascript")
           (typescript "https://github.com/tree-sitter/tree-sitter-typescript")
           (c "https://github.com/tree-sitter/tree-sitter-c")
