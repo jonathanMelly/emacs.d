@@ -243,6 +243,9 @@
   (org-link-set-parameters "ssh"
   :follow (lambda (path)
             (start-process "ssh-connect" nil "ssh-connect" path)))
+
+  ;; sticky agenda makes possible to have multiple windows with different agenda views...
+  ;;(setq org-toggle-sticky-agenda 1)
 )
 
 (setq org-refile-targets '(
