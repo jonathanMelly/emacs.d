@@ -176,18 +176,31 @@
  
  (setq org-download-file-format-function 'org-download-file-format-default))
 
+;;; ImageMagick
+;; ImageMagick 7 utilise "magick" au lieu de "convert"
+(when (eq system-type 'windows-nt)
+  (setq imagemagick-convert-program "magick")
+  )
+
+;; Activer le support ImageMagick
+  (when (fboundp 'imagemagick-types)
+    (imagemagick-register-types))
+
+;; Permettre à #+ATTR_ORG de contrôler la largeur
+(setq org-image-actual-width nil)
+
 
 ;;; Org Capture
 (defun my/coaching-file ()
   (setq my/coaching-student (read-string "Élève: "))
-  (format "c:/Users/jonmelly.DGEP/OneDrive - Education Vaud/02-jmy/coaching/coaching-%s.org" my/coaching-student))
+  (format "c:/Users/jonmelly/OneDrive - Education Vaud/02-jmy/coaching/coaching-%s.org" my/coaching-student))
 (setq org-capture-templates
       '(
         ("t" "Todo" entry (file "~/org/inbox.org")
          "* TODO %^{Title}\nSCHEDULED: %^{Scheduled}t\n%i%?")
         ("c" "Coaching ETML" plain
          (file my/coaching-file)
-         (file "c:/Users/jonmelly.DGEP/OneDrive - Education Vaud/02-jmy/coaching/coaching-etml-template.org")
+         (file "c:/Users/jonmelly/OneDrive - Education Vaud/02-jmy/coaching/coaching-etml-template.org")
 	 :no-save t
          :jump-to-captured t
 	 :hook (org-fold-hide-drawer-all flyspell-mode)
